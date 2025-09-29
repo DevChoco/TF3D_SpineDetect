@@ -634,180 +634,65 @@ def create_skeleton_visualization(skeleton_points):
 def print_angles(angles):
     """
     계산된 각도들을 출력합니다.
-    의학적 기준에 따른 정상/주의/위험 범위로 분류합니다.
     
     Args:
         angles (dict): 각도 분석 결과 딕셔너리
     """
-    print("\n" + "="*60)
-    print("           인체 자세 분석 결과 (의학적 기준)")
-    print("="*60)
+    print("\n" + "="*50)
+    print("           인체 자세 분석 결과")
+    print("="*50)
     
-    def get_status_symbol_and_color(status):
-        """상태에 따른 심볼과 색상 반환"""
-        if status == "정상":
-            return "✅", "정상"
-        elif status == "주의":
-            return "⚠️", "주의"
-        else:  # 위험
-            return "🔴", "위험"
+    print(f"\n척추 각도 분석:")
+    print(f"   • 경추 전만각 (Cervical Lordosis): {angles['cervical_lordosis']:.1f}°")
+    print(f"     - 정상 범위: 35-45°")
     
-    def evaluate_cervical_lordosis(angle):
-        """경추 전만각 평가 (촬영: 측면)"""
-        if 20 <= angle <= 35:
-            return "정상"
-        elif (10 <= angle < 20) or (35 < angle <= 45):
-            return "주의"
-        else:  # <10° or >45°
-            return "위험"
+    print(f"\n   • 흉추 후만각 (Thoracic Kyphosis): {angles['thoracic_kyphosis']:.1f}°")
+    print(f"     - 정상 범위: 20-40°")
     
-    def evaluate_thoracic_kyphosis(angle):
-        """흉추 후만각 평가 (촬영: 측면)"""
-        if 20 <= angle <= 40:
-            return "정상"
-        elif (15 <= angle < 20) or (40 < angle <= 55):
-            return "주의"
-        else:  # <15° or >55°
-            return "위험"
-    
-    def evaluate_lumbar_lordosis(angle):
-        """요추 전만각 평가 (촬영: 정면)"""
-        if 40 <= angle <= 60:
-            return "정상"
-        elif (30 <= angle < 40) or (60 < angle <= 70):
-            return "주의"
-        else:  # <30° or >70°
-            return "위험"
-    
-    def evaluate_shoulder_level(angle):
-        """어깨 수평도 평가 (촬영: 정면)"""
-        abs_angle = abs(angle)
-        if abs_angle <= 2:
-            return "정상"
-        elif 2 < abs_angle <= 10:
-            return "주의"
-        else:  # >10°
-            return "위험"
-    
-    def evaluate_pelvis_tilt(angle):
-        """골반 기울기 평가 (촬영: 측면)"""
-        abs_angle = abs(angle)
-        if abs_angle <= 3:
-            return "정상"
-        elif 3 < abs_angle <= 10:
-            return "주의"
-        else:  # >10°
-            return "위험"
-    
-    def evaluate_spine_alignment(angle):
-        """척추 정렬도 평가 (촬영: 측면) - 각도를 cm로 근사 변환"""
-        # 각도를 cm 단위로 근사 변환 (1도 ≈ 1.7cm로 가정)
-        cm_deviation = abs(angle) * 1.7
-        if cm_deviation < 4:
-            return "정상"
-        elif 4 <= cm_deviation <= 6:
-            return "주의"
-        else:  # >6 cm
-            return "위험"
-    
-    print(f"\n척추 각도 분석 (의학적 디스크 진단 기준):")
-    
-    # 경추 전만각 평가
-    cervical_status = evaluate_cervical_lordosis(angles['cervical_lordosis'])
-    symbol, status_text = get_status_symbol_and_color(cervical_status)
-    print(f"   {symbol} 경추 전만각 (Cervical Lordosis): {angles['cervical_lordosis']:.1f}° [{status_text}]")
-    print(f"     - 정상: 20°~35° | 주의: 10°~20° or 35°~45° | 위험: <10° or >45°")
-    
-    # 흉추 후만각 평가
-    thoracic_status = evaluate_thoracic_kyphosis(angles['thoracic_kyphosis'])
-    symbol, status_text = get_status_symbol_and_color(thoracic_status)
-    print(f"\n   {symbol} 흉추 후만각 (Thoracic Kyphosis): {angles['thoracic_kyphosis']:.1f}° [{status_text}]")
-    print(f"     - 정상: 20°~40° | 주의: 15°~20° or 40°~55° | 위험: <15° or >55°")
-    
-    # 요추 전만각 평가
-    lumbar_status = evaluate_lumbar_lordosis(angles['lumbar_lordosis'])
-    symbol, status_text = get_status_symbol_and_color(lumbar_status)
-    print(f"\n   {symbol} 요추 전만각 (Lumbar Lordosis): {angles['lumbar_lordosis']:.1f}° [{status_text}]")
-    print(f"     - 정상: 40°~60° | 주의: 30°~40° or 60°~70° | 위험: <30° or >70°")
+    print(f"\n   • 요추 전만각 (Lumbar Lordosis): {angles['lumbar_lordosis']:.1f}°")
+    print(f"     - 정상 범위: 40-60°")
     
     print(f"\n어깨 및 골반 분석:")
+    print(f"   • 어깨 수평도 (Shoulder Level): {angles['shoulder_level']:.1f}°")
+    print(f"     - 정상: 0° (완전 수평)")
     
-    # 어깨 수평도 평가
-    shoulder_status = evaluate_shoulder_level(angles['shoulder_level'])
-    symbol, status_text = get_status_symbol_and_color(shoulder_status)
-    print(f"   {symbol} 어깨 수평도 (Shoulder Level): {angles['shoulder_level']:.1f}° [{status_text}]")
-    print(f"     - 정상: ≤2° | 주의: >2°~10° | 위험: >10°")
+    print(f"\n   • 골반 기울기 (Pelvis Tilt): {angles['pelvis_tilt']:.1f}°")
+    print(f"     - 정상: 0° (완전 수평)")
     
-    # 골반 기울기 평가
-    pelvis_status = evaluate_pelvis_tilt(angles['pelvis_tilt'])
-    symbol, status_text = get_status_symbol_and_color(pelvis_status)
-    print(f"\n   {symbol} 골반 기울기 (Pelvis Tilt): {angles['pelvis_tilt']:.1f}° [{status_text}]")
-    print(f"     - 정상: ≤3° | 주의: >3°~10° | 위험: >10°")
+    print(f"\n전체 척추 정렬:")
+    print(f"   • 척추 정렬도 (Spine Alignment): {angles['spine_alignment']:.1f}°")
+    print(f"     - 정상: 0° (완전 수직)")
     
-    # 척추 정렬도 평가
-    spine_status = evaluate_spine_alignment(angles['spine_alignment'])
-    symbol, status_text = get_status_symbol_and_color(spine_status)
-    cm_deviation = abs(angles['spine_alignment']) * 1.7
-    print(f"\n   {symbol} 척추 정렬도 (Spine Alignment): {angles['spine_alignment']:.1f}° (≈{cm_deviation:.1f}cm) [{status_text}]")
-    print(f"     - 정상: <4cm | 주의: 4~6cm | 위험: >6cm")
+    # 자세 평가
+    print(f"\n자세 평가:")
+    issues = []
     
-    # 종합 평가
-    print(f"\n종합 자세 평가:")
-    print("="*40)
+    if angles['cervical_lordosis'] < 30:
+        issues.append("경추 전만이 부족합니다 (거북목 의심)")
+    elif angles['cervical_lordosis'] > 50:
+        issues.append("경추 전만이 과도합니다")
     
-    all_statuses = [cervical_status, thoracic_status, lumbar_status, 
-                   shoulder_status, pelvis_status, spine_status]
+    if angles['thoracic_kyphosis'] > 45:
+        issues.append("흉추 후만이 과도합니다 (라운드 숄더 의심)")
     
-    danger_count = all_statuses.count("위험")
-    caution_count = all_statuses.count("주의")
-    normal_count = all_statuses.count("정상")
+    if angles['lumbar_lordosis'] < 35:
+        issues.append("요추 전만이 부족합니다")
+    elif angles['lumbar_lordosis'] > 65:
+        issues.append("요추 전만이 과도합니다")
     
-    print(f"   정상: {normal_count}개 | 주의: {caution_count}개 | 위험: {danger_count}개")
+    if abs(angles['shoulder_level']) > 5:
+        issues.append(f"어깨 높이가 불균형합니다 ({angles['shoulder_level']:.1f}°)")
     
-    if danger_count > 0:
-        print(f"   🔴 종합 평가: 위험 - 즉시 전문의 상담을 권장합니다")
-        print(f"      {danger_count}개 항목에서 위험 수준을 보이고 있습니다.")
-    elif caution_count >= 3:
-        print(f"   ⚠️  종합 평가: 주의 - 자세 교정 및 관리가 필요합니다")
-        print(f"      {caution_count}개 항목에서 주의가 필요한 상태입니다.")
-    elif caution_count > 0:
-        print(f"   ⚠️  종합 평가: 양호 - 일부 개선이 필요합니다")
-        print(f"      {caution_count}개 항목에서 경미한 문제가 있습니다.")
+    if abs(angles['pelvis_tilt']) > 5:
+        issues.append(f"골반이 기울어져 있습니다 ({angles['pelvis_tilt']:.1f}°)")
+    
+    if abs(angles['spine_alignment']) > 10:
+        issues.append(f"척추가 기울어져 있습니다 ({angles['spine_alignment']:.1f}°)")
+    
+    if issues:
+        for issue in issues:
+            print(f"   ⚠️  {issue}")
     else:
-        print(f"   ✅ 종합 평가: 우수 - 전반적으로 건강한 자세입니다!")
+        print(f"   ✅  전반적으로 양호한 자세입니다!")
     
-    # 구체적인 권장사항
-    print(f"\n권장사항:")
-    recommendations = []
-    
-    if cervical_status == "위험":
-        recommendations.append("• 경추: 목 디스크 위험 - 즉시 정형외과/신경외과 진료")
-    elif cervical_status == "주의":
-        recommendations.append("• 경추: 목 스트레칭 및 자세 교정 운동")
-    
-    if thoracic_status == "위험":
-        recommendations.append("• 흉추: 심한 라운드 숄더 - 전문적 재활 치료")
-    elif thoracic_status == "주의":
-        recommendations.append("• 흉추: 가슴 펴기 운동 및 상체 근력 강화")
-    
-    if lumbar_status == "위험":
-        recommendations.append("• 요추: 허리 디스크 위험 - 즉시 정형외과 진료")
-    elif lumbar_status == "주의":
-        recommendations.append("• 요추: 코어 강화 운동 및 허리 스트레칭")
-    
-    if shoulder_status in ["위험", "주의"]:
-        recommendations.append("• 어깨: 어깨 균형 운동 및 일상 자세 점검")
-    
-    if pelvis_status in ["위험", "주의"]:
-        recommendations.append("• 골반: 골반 교정 운동 및 하체 근력 강화")
-    
-    if spine_status in ["위험", "주의"]:
-        recommendations.append("• 척추: 전체적인 자세 교정 프로그램 참여")
-    
-    if recommendations:
-        for rec in recommendations:
-            print(f"   {rec}")
-    else:
-        print(f"   ✅ 현재 자세를 유지하며 정기적인 운동을 권장합니다.")
-    
-    print("="*60)
+    print("="*50)

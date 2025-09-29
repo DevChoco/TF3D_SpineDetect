@@ -20,6 +20,71 @@ from modules.skeleton_parser import (
 from modules.mesh_generator import create_and_save_mesh
 
 
+def generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders, output_path="output/debug/xray_overlay.png"):
+    """
+    메시 위에 스켈레톤을 강제로 오버레이한 X-Ray 이미지를 생성합니다.
+
+    Open3D의 실시간 뷰어는 깊이 테스트를 비활성화할 수 없어 완전한 투시가 어렵습니다.
+    대신 오프스크린 렌더러로 메시와 스켈레톤을 각각 렌더링한 뒤 2D에서 합성합니다.
+    """
+    if mesh is None:
+        return
+
+    try:
+        renderer = o3d.visualization.rendering.OffscreenRenderer(1280, 960)
+    except Exception as exc:
+        print(f"X-Ray 스냅샷 생성 실패: {exc}")
+        return
+
+    scene = renderer.scene
+    scene.set_background([0, 0, 0, 1])
+
+    bbox = mesh.get_axis_aligned_bounding_box()
+    center = bbox.get_center()
+    extent = bbox.get_extent()
+    radius = np.linalg.norm(extent)
+    eye = center + np.array([0.0, 0.0, max(radius, 1.0)])
+    up = np.array([0.0, 1.0, 0.0])
+
+    mesh_material = o3d.visualization.rendering.MaterialRecord()
+    mesh_material.shader = "defaultLit"
+    mesh_material.base_color = (0.7, 0.75, 0.85, 1.0)
+    scene.add_geometry("mesh", mesh, mesh_material)
+    renderer.setup_camera(55.0, center, eye, up)
+    mesh_image = np.asarray(renderer.render_to_image())
+
+    scene.clear_geometry()
+
+    skeleton_point_mat = o3d.visualization.rendering.MaterialRecord()
+    skeleton_point_mat.shader = "defaultUnlit"
+    skeleton_point_mat.base_color = (1.0, 0.2, 0.2, 1.0)
+    skeleton_point_mat.point_size = 12.0
+    scene.add_geometry("skeleton_points", skeleton_pcd, skeleton_point_mat)
+
+    for idx, cylinder in enumerate(skeleton_cylinders):
+        cyl_mat = o3d.visualization.rendering.MaterialRecord()
+        cyl_mat.shader = "defaultUnlit"
+        cyl_mat.base_color = (1.0, 0.5, 0.0, 1.0)
+        scene.add_geometry(f"skeleton_bone_{idx}", cylinder, cyl_mat)
+
+    renderer.setup_camera(55.0, center, eye, up)
+    skeleton_image = np.asarray(renderer.render_to_image())
+
+    if mesh_image.dtype != np.uint8:
+        mesh_image = (mesh_image * 255).clip(0, 255).astype(np.uint8)
+    if skeleton_image.dtype != np.uint8:
+        skeleton_image = (skeleton_image * 255).clip(0, 255).astype(np.uint8)
+
+    overlay = mesh_image.copy()
+    mask = np.any(skeleton_image > 15, axis=2)
+    overlay[mask] = skeleton_image[mask]
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    overlay_bgr = cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(output_path, overlay_bgr)
+    print(f"X-Ray 오버레이 이미지 저장: {output_path}")
+
+
 def process_depth_maps(views_dict, debug_save=True): # 뎁스 파싱
     point_clouds = {}
     
@@ -216,10 +281,11 @@ def visualize_results(merged_cloud, mesh, skeleton_pcd, skeleton_cylinders):
     merged_cloud_small.paint_uniform_color([0.3, 0.3, 0.3])  # 더 어두운 회색으로 반투명 효과
     vis.add_geometry(merged_cloud_small)
     
-    # 메시 추가 (있는 경우)
+    # 메시 추가 (있는 경우) - 와이어프레임으로만 표시해 스켈레톤을 가리지 않음
     if mesh is not None:
-        mesh.paint_uniform_color([0.8, 0.8, 0.9])  # 연한 회색
-        vis.add_geometry(mesh)
+        mesh_wireframe = o3d.geometry.LineSet.create_from_triangle_mesh(mesh)
+        mesh_wireframe.paint_uniform_color([0.7, 0.7, 1.0])  # 연한 파란색 와이어프레임
+        vis.add_geometry(mesh_wireframe)
     
     # 스켈레톤 추가
     vis.add_geometry(skeleton_pcd)
@@ -294,6 +360,9 @@ def main():
             merged_cloud, views["front"]
         )
         
+        # 메시 내부 X-Ray 오버레이 이미지 생성
+        generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders)
+
         # 6단계: 결과 시각화
         visualize_results(merged_cloud, mesh, skeleton_pcd, skeleton_cylinders)
         
