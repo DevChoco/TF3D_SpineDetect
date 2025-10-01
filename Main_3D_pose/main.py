@@ -309,6 +309,7 @@ def visualize_results(merged_cloud, mesh, skeleton_pcd, skeleton_cylinders):
     vis.run()
     vis.destroy_window()
 
+
 def main():
     """메인 실행 함수"""
     print("="*60)
@@ -346,27 +347,8 @@ def main():
         # 3단계: 포인트 클라우드 병합 및 정리
         merged_cloud = merge_and_clean_pointclouds(aligned_clouds)
         
-        # 4단계: 고급 메시 생성, 홀 채우기 및 버텍스 리덕션
-        print("\n=== 고급 메시 생성 및 뎁스 이미지 한계 보완 ===")
-        print("포인트 클라우드를 고품질 메시로 변환하고 팔로 가려진 부분 등 누락된 영역을 지능적으로 복원합니다...")
-        print("특별히 옆구리, 팔 안쪽 등 큰 구멍들을 집중적으로 채웁니다...")
-        
-        try:
-            mesh, saved_files = create_and_save_mesh(
-                merged_cloud, 
-                "output/3d_models", 
-                "body_mesh_fpfh",
-                create_lod=True,
-                reduction_ratio=0.2,  # 80% 버텍스 감소
-                optimization_level="high_quality",  # 고품질 최적화
-                enable_quality_analysis=True,
-                enable_hole_filling=True,  # 홀 채우기 활성화
-                hole_filling_method="comprehensive"  # 종합적 접근법 사용
-            )
-        except TypeError:
-            # 기존 함수 시그니처와 호환되지 않는 경우 기본 호출
-            print("기본 메시 생성 모드로 전환...")
-            mesh, saved_files = create_and_save_mesh(merged_cloud, "output/3d_models", "body_mesh_fpfh")
+        # 4단계: 메시 생성 및 저장
+        mesh, saved_files = create_and_save_mesh(merged_cloud, "output/3d_models", "body_mesh_fpfh")
         
         if saved_files:
             print(f"\n메시 파일이 저장되었습니다:")
