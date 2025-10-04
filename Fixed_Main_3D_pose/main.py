@@ -317,20 +317,20 @@ def main():
     print("="*60)
     
     # 입력 이미지 경로 설정
-    views = {
-        "front": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_정면.bmp",
-        "right": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_오른쪽.bmp",
-        "left": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_왼쪽.bmp",
-        "back": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_후면.bmp"
-    }
+    # views = {
+    #     "front": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_정면.bmp",
+    #     "right": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_오른쪽.bmp",
+    #     "left": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_왼쪽.bmp",
+    #     "back": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_후면.bmp"
+    # }
     
     # 다른 테스트 데이터 (남성)
-    # views = {
-    #     "front": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\남성\남_정면.bmp",
-    #     "right": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\남성\남_오른쪽.bmp",
-    #     "left": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\남성\남_왼쪽.bmp",
-    #     "back": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\남성\남_후면.bmp"
-    # }
+    views = {
+        "front": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\정면_남\DepthMap0.bmp",
+        "right": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\오른쪽_남\DepthMap0.bmp",
+        "left": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\왼쪽_남\DepthMap0.bmp",
+        "back": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\후면_남\DepthMap0.bmp"
+    }
     
     try:
         # 1단계: 깊이맵 처리 및 포인트 클라우드 생성
@@ -352,7 +352,7 @@ def main():
         print("특별히 옆구리, 팔 안쪽 등 큰 구멍들을 집중적으로 채웁니다...")
         
         try:
-            mesh, saved_files = create_and_save_mesh(
+            mesh, saved_files = create_and_save_mesh( #================================================================= 설정 ==================================================================
                 merged_cloud, 
                 "output/3d_models", 
                 "body_mesh_fpfh",
@@ -384,9 +384,9 @@ def main():
         # 6단계: 결과 시각화
         visualize_results(merged_cloud, mesh, skeleton_pcd, skeleton_cylinders)
         
-        print("\n="*60)
+        print("\n="*30)
         print("     3D 자세 분석이 완료되었습니다!")
-        print("="*60)
+        print("="*30)
         
     except Exception as e:
         print(f"\n오류 발생: {e}")

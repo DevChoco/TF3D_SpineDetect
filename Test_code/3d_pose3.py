@@ -806,19 +806,19 @@ def print_angles(angles):
 
 def visualize_3d_pose():
     # 각 뷰의 DepthMap 로드
-    views = {
-        "front": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_정면.bmp",
-        "right": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_오른쪽.bmp",
-        "left": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_왼쪽.bmp",
-        "back": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_후면.bmp"
-    }
-    
     # views = {
-    #     "front": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\정면_여\DepthMap0.png",
-    #     "right": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\오른쪽_여\DepthMap0.png",
-    #     "left": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\왼쪽_여\DepthMap0.png",
-    #     "back": r"d:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test\정상\후면_여\DepthMap0.png"
+    #     "front": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_정면.bmp",
+    #     "right": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_오른쪽.bmp",
+    #     "left": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_왼쪽.bmp",
+    #     "back": r"D:\Lab2\3D_Body_Posture_Analysis_FPFH\test2\여성\여_후면.bmp"
     # }
+    
+    views = {
+        "front": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\남성\남_정면.bmp",
+        "right": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\남성\남_오른쪽.bmp",
+        "left": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\남성\남_왼쪽.bmp",
+        "back": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\남성\남_후면.bmp"
+    }
     
     front_landmarks = None
     
