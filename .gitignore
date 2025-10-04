@@ -1,4 +1,4 @@
 output/
-output/3d_models/
-
-__pycache__/
+Fixed_Main_3D_pose/output/
+Main_3D_pose/output/
+__pycache__
