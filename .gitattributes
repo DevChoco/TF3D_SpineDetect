@@ -1,0 +1,2 @@
+skplx_SK_test/smplx/*.npz filter=lfs diff=lfs merge=lfs -text
+skplx_SK_test/smplx/*.pkl filter=lfs diff=lfs merge=lfs -text

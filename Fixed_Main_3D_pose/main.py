@@ -85,7 +85,7 @@ def generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders, output_path="
     print(f"X-Ray 오버레이 이미지 저장: {output_path}")
 
 
-def process_depth_maps(views_dict, debug_save=True): # 뎁스 파싱
+def process_depth_maps(views_dict, debug_save=True, debug_dir="output/debug"): # 뎁스 파싱
     point_clouds = {}
     
     for view_name, file_path in views_dict.items():
@@ -98,7 +98,6 @@ def process_depth_maps(views_dict, debug_save=True): # 뎁스 파싱
                 from modules.pointcloud_generator import create_mask_from_depth
                 mask = create_mask_from_depth(depth_map, threshold_low=0.2, threshold_high=0.95)
                 
-                debug_dir = "output/debug"
                 os.makedirs(debug_dir, exist_ok=True)
                 mask_path = os.path.join(debug_dir, f"{view_name}_mask.png")
                 cv2.imwrite(mask_path, (mask * 255).astype(np.uint8))
@@ -335,18 +334,14 @@ def main():
     # ============================================================
     # True: Point-to-Plane ICP (더 정밀, 법선 벡터 기반, 평면에 수직 방향 최적화)
     # False: Point-to-Point ICP (기본, 점 간 거리 최소화)
-    USE_POINT_TO_PLANE_ICP = True
+    USE_POINT_TO_PLANE_ICP = True  # ========================================================================================================================
     
     print(f"\n[ICP 모드 설정]")
     if USE_POINT_TO_PLANE_ICP:
-        print("  ✓ Point-to-Plane ICP 사용 (고정밀 정렬)")
-        print("    - 법선 벡터를 활용하여 평면에 수직 방향으로 정렬")
-        print("    - 더 정확한 표면 매칭 제공")
+        print("Point-to-Plane ICP 사용")
     else:
-        print("  ✓ Point-to-Point ICP 사용 (기본 정렬)")
-        print("    - 점 간 거리를 최소화하여 정렬")
-        print("    - 빠른 처리 속도")
-    
+        print("Point-to-Point ICP 사용")
+        
     # 입력 이미지 경로 설정
     views = {
         "front": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\여성\여_정면.bmp",
@@ -364,8 +359,21 @@ def main():
     # }
     
     try:
-        # 1단계: 깊이맵 처리 및 포인트 클라우드 생성
-        point_clouds = process_depth_maps(views, debug_save=True)
+        # 현재 스크립트의 디렉토리를 기준으로 절대 경로 설정
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.join(script_dir, "output", "3d_models")
+        debug_dir = os.path.join(script_dir, "output", "debug")
+        
+        # 디렉토리 생성
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(debug_dir, exist_ok=True)
+        
+        print(f"\n[출력 경로 설정]")
+        print(f"3D 모델 저장 경로: {output_dir}")
+        print(f"디버그 파일 경로: {debug_dir}")
+        
+        # 뎁스맵 처리 및 포인트 클라우드 생성
+        point_clouds = process_depth_maps(views, debug_save=True, debug_dir=debug_dir)
         
         if not point_clouds:
             print("포인트 클라우드 생성 실패. 프로그램을 종료합니다.")
@@ -385,7 +393,7 @@ def main():
         try:
             mesh, saved_files = create_and_save_mesh( #================================================================= 설정 ==================================================================
                 merged_cloud, 
-                "output/3d_models", 
+                output_dir,  # 절대 경로 사용
                 "body_mesh_fpfh",
                 create_lod=True,
                 reduction_ratio=0.2,  # 80% 버텍스 감소
@@ -397,7 +405,7 @@ def main():
         except TypeError:
             # 기존 함수 시그니처와 호환되지 않는 경우 기본 호출
             print("기본 메시 생성 모드로 전환...")
-            mesh, saved_files = create_and_save_mesh(merged_cloud, "output/3d_models", "body_mesh_fpfh")
+            mesh, saved_files = create_and_save_mesh(merged_cloud, output_dir, "body_mesh_fpfh")
         
         if saved_files:
             print(f"\n메시 파일이 저장되었습니다:")
@@ -409,8 +417,9 @@ def main():
             merged_cloud, views["front"]
         )
         
-        # 메시 내부 X-Ray 오버레이 이미지 생성
-        generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders)
+        # 메시 내부 X-Ray 오버레이 이미지 생성 (디버그 경로 사용)
+        xray_path = os.path.join(debug_dir, "xray_overlay.png")
+        generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders, xray_path)
 
         # 6단계: 결과 시각화
         visualize_results(merged_cloud, mesh, skeleton_pcd, skeleton_cylinders)

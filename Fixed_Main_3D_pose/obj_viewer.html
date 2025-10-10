@@ -161,10 +161,6 @@
                 <div class="viewport-label">High</div>
                 <div class="viewport-info" id="info-4"></div>
             </div>
-            <div class="viewport" id="viewport-5">
-                <div class="viewport-label">Ultra High</div>
-                <div class="viewport-info" id="info-5"></div>
-            </div>
         </div>
     </div>
 
@@ -182,14 +178,13 @@
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // 모델 파일 설정
+        // 모델 파일 설정 (실제 생성되는 파일에 맞춤)
         const models = [
             { name: 'Ultra Low', file: 'output/3d_models/body_mesh_fpfh_ultra_low.obj' },
             { name: 'Low', file: 'output/3d_models/body_mesh_fpfh_low.obj' },
             { name: 'Medium', file: 'output/3d_models/body_mesh_fpfh_medium.obj' },
             { name: 'Default', file: 'output/3d_models/body_mesh_fpfh.obj' },
-            { name: 'High', file: 'output/3d_models/body_mesh_fpfh_high.obj' },
-            { name: 'Ultra High', file: 'output/3d_models/body_mesh_fpfh_ultra_high.obj' }
+            { name: 'High', file: 'output/3d_models/body_mesh_fpfh_high.obj' }
         ];
 
         // 각 뷰포트 설정
