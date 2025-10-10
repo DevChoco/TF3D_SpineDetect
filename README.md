@@ -8,7 +8,7 @@
 > 3d_models 비교분석을 위해만듬
 
 ```
-    python -m http.server 8000
+python -m http.server 8000
 ```
 - 접속 : `http://localhost:8000/obj_viewer.html`
 
