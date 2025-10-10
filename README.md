@@ -10,7 +10,7 @@
 ```
 python -m http.server 8000
 ```
-- 접속 : `http://localhost:8000/obj_viewer.html`
+- 접속 : `http://localhost:8000/Fixed_Main_3D_pose/obj_viewer.html`
 
 -------------
 
