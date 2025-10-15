@@ -3,6 +3,7 @@ import os
 import cv2
 import open3d as o3d
 import copy
+import json
 
 from modules.pointcloud_generator import (
     load_depth_map, 
@@ -18,6 +19,99 @@ from modules.skeleton_parser import (
     print_angles
 )
 from modules.mesh_generator import create_and_save_mesh
+
+
+def save_skeleton_data(skeleton_points, skeleton_pcd, skeleton_cylinders, output_dir, merged_cloud=None):
+    """
+    스켈레톤 데이터를 JSON 파일로 저장합니다 (웹 뷰어용).
+    
+    Args:
+        skeleton_points (dict): 스켈레톤 포인트 딕셔너리
+        skeleton_pcd (o3d.geometry.PointCloud): 스켈레톤 포인트 클라우드
+        skeleton_cylinders (list): 스켈레톤 연결선 실린더 리스트
+        output_dir (str): 저장 디렉토리
+        merged_cloud (o3d.geometry.PointCloud): 병합된 포인트 클라우드 (크기 계산용)
+    """
+    if skeleton_points is None:
+        return
+    
+    try:
+        skeleton_data = {
+            "points": {},
+            "connections": [],
+            "mesh_info": {}
+        }
+        
+        # 메시/포인트클라우드 크기 정보 저장
+        if merged_cloud is not None and len(merged_cloud.points) > 0:
+            points = np.asarray(merged_cloud.points)
+            min_bound = np.min(points, axis=0)
+            max_bound = np.max(points, axis=0)
+            
+            skeleton_data["mesh_info"] = {
+                "height": float(max_bound[1] - min_bound[1]),
+                "width": float(max_bound[0] - min_bound[0]),
+                "depth": float(max_bound[2] - min_bound[2]),
+                "min_bound": {
+                    "x": float(min_bound[0]),
+                    "y": float(min_bound[1]),
+                    "z": float(min_bound[2])
+                },
+                "max_bound": {
+                    "x": float(max_bound[0]),
+                    "y": float(max_bound[1]),
+                    "z": float(max_bound[2])
+                }
+            }
+            print(f"  메시 크기 - 높이: {skeleton_data['mesh_info']['height']:.2f}, "
+                  f"너비: {skeleton_data['mesh_info']['width']:.2f}, "
+                  f"깊이: {skeleton_data['mesh_info']['depth']:.2f}")
+        
+        # 포인트 데이터 저장
+        for name, point in skeleton_points.items():
+            if point is not None:
+                skeleton_data["points"][name] = {
+                    "x": float(point[0]),
+                    "y": float(point[1]),
+                    "z": float(point[2])
+                }
+        
+        # 연결선 데이터 저장 (스켈레톤 구조)
+        connections = [
+            ["HEAD", "NECK"],
+            ["NECK", "SPINE_UPPER"],
+            ["SPINE_UPPER", "SPINE_MID"],
+            ["SPINE_MID", "SPINE_LOWER"],
+            ["SPINE_LOWER", "PELVIS"],
+            ["NECK", "SHOULDER_LEFT"],
+            ["NECK", "SHOULDER_RIGHT"],
+            ["SHOULDER_LEFT", "ELBOW_LEFT"],
+            ["SHOULDER_RIGHT", "ELBOW_RIGHT"],
+            ["ELBOW_LEFT", "WRIST_LEFT"],
+            ["ELBOW_RIGHT", "WRIST_RIGHT"],
+            ["PELVIS", "HIP_LEFT"],
+            ["PELVIS", "HIP_RIGHT"],
+            ["HIP_LEFT", "KNEE_LEFT"],
+            ["HIP_RIGHT", "KNEE_RIGHT"],
+            ["KNEE_LEFT", "ANKLE_LEFT"],
+            ["KNEE_RIGHT", "ANKLE_RIGHT"]
+        ]
+        
+        for connection in connections:
+            if connection[0] in skeleton_data["points"] and connection[1] in skeleton_data["points"]:
+                skeleton_data["connections"].append(connection)
+        
+        # JSON 파일로 저장
+        json_path = os.path.join(output_dir, "skeleton_data.json")
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(skeleton_data, f, indent=2, ensure_ascii=False)
+        
+        print(f"\n스켈레톤 데이터 저장: {json_path}")
+        print(f"  포인트 수: {len(skeleton_data['points'])}")
+        print(f"  연결선 수: {len(skeleton_data['connections'])}")
+        
+    except Exception as e:
+        print(f"스켈레톤 데이터 저장 중 오류: {e}")
 
 
 def generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders, output_path="output/debug/xray_overlay.png"):
@@ -344,11 +438,18 @@ def main():
         
     # 입력 이미지 경로 설정
     views = {
-        "front": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\여성\여_정면.bmp",
-        "right": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\여성\여_오른쪽.bmp",
-        "left": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\여성\여_왼쪽.bmp",
-        "back": r"D:\기타\파일 자료\파일\프로젝트 PJ\3D_Body_Posture_Analysis\test2\여성\여_후면.bmp"
+        "front": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_정면\DepthMap0.bmp",
+        "right": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_R\DepthMap0.bmp",
+        "left": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_L\DepthMap0.bmp",
+        "back": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_후면\DepthMap0.bmp"
     }
+
+    # views = {
+    #     "front": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\여성\여_정면.bmp",
+    #     "right": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\여성\여_오른쪽.bmp",
+    #     "left": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\여성\여_왼쪽.bmp",
+    #     "back": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\여성\여_후면.bmp"
+    # }
     
     # 다른 테스트 데이터 (남성)
     # views = {
@@ -416,6 +517,9 @@ def main():
         skeleton_points, angles, skeleton_pcd, skeleton_cylinders = analyze_posture(
             merged_cloud, views["front"]
         )
+        
+        # 스켈레톤 데이터를 JSON으로 저장 (웹 뷰어용) - 병합된 포인트 클라우드 정보 포함
+        save_skeleton_data(skeleton_points, skeleton_pcd, skeleton_cylinders, output_dir, merged_cloud)
         
         # 메시 내부 X-Ray 오버레이 이미지 생성 (디버그 경로 사용)
         xray_path = os.path.join(debug_dir, "xray_overlay.png")

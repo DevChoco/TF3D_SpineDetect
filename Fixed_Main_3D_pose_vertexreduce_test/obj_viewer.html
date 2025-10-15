@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Body Mesh Viewer - Multiple LOD</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        #container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-bottom: 2px solid #444;
+            text-align: center;
+        }
+        #header h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        #controls button {
+            padding: 8px 16px;
+            background-color: #4a4a4a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #controls button:hover {
+            background-color: #5a5a5a;
+        }
+        #controls button.active {
+            background-color: #0066cc;
+        }
+        #viewports {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 2px;
+            background-color: #000;
+            padding: 2px;
+        }
+        .viewport {
+            position: relative;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+        .viewport canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+        .viewport-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .viewport-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            z-index: 10;
+            pointer-events: none;
+            max-width: calc(100% - 40px);
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        #loading.hidden {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #0066cc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">모델 로딩 중...</div>
+    </div>
+    
+    <div id="container">
+        <div id="header">
+            <h1>3D Body Mesh Viewer - Multiple LOD Comparison</h1>
+            <div id="controls">
+                <button id="resetCamera">카메라 리셋</button>
+                <button id="toggleWireframe">와이어프레임 토글</button>
+                <button id="toggleGrid">그리드 토글</button>
+                <button id="autoRotate">자동 회전</button>
+            </div>
+        </div>
+        <div id="viewports">
+            <div class="viewport" id="viewport-0">
+                <div class="viewport-label">Ultra Low</div>
+                <div class="viewport-info" id="info-0"></div>
+            </div>
+            <div class="viewport" id="viewport-1">
+                <div class="viewport-label">Low</div>
+                <div class="viewport-info" id="info-1"></div>
+            </div>
+            <div class="viewport" id="viewport-2">
+                <div class="viewport-label">Medium</div>
+                <div class="viewport-info" id="info-2"></div>
+            </div>
+            <div class="viewport" id="viewport-3">
+                <div class="viewport-label">Default</div>
+                <div class="viewport-info" id="info-3"></div>
+            </div>
+            <div class="viewport" id="viewport-4">
+                <div class="viewport-label">High</div>
+                <div class="viewport-info" id="info-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 모델 파일 설정 (실제 생성되는 파일에 맞춤)
+        const models = [
+            { name: 'Ultra Low', file: 'output/3d_models/body_mesh_fpfh_ultra_low.obj' },
+            { name: 'Low', file: 'output/3d_models/body_mesh_fpfh_low.obj' },
+            { name: 'Medium', file: 'output/3d_models/body_mesh_fpfh_medium.obj' },
+            { name: 'Default', file: 'output/3d_models/body_mesh_fpfh.obj' },
+            { name: 'High', file: 'output/3d_models/body_mesh_fpfh_high.obj' }
+        ];
+
+        // 각 뷰포트 설정
+        const viewports = [];
+        let wireframeMode = false;
+        let showGrid = true;
+        let autoRotateEnabled = false;
+        let loadedCount = 0;
+        let isSyncing = false;
+
+        // 초기화
+        function init() {
+            console.log('Initializing viewers...');
+            console.log('THREE:', THREE);
+            console.log('OBJLoader:', OBJLoader);
+            console.log('OrbitControls:', OrbitControls);
+            
+            models.forEach((model, index) => {
+                const viewportDiv = document.getElementById(`viewport-${index}`);
+                const width = viewportDiv.clientWidth;
+                const height = viewportDiv.clientHeight;
+
+                // Scene
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1a1a1a);
+
+                // Camera
+                const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 10000);
+                camera.position.set(0, 100, 300);
+
+                // Renderer
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(width, height);
+                renderer.shadowMap.enabled = true;
+                viewportDiv.appendChild(renderer.domElement);
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+
+                const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight1.position.set(100, 100, 50);
+                scene.add(directionalLight1);
+
+                const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight2.position.set(-100, 50, -50);
+                scene.add(directionalLight2);
+
+                // Grid
+                const gridHelper = new THREE.GridHelper(500, 50, 0x444444, 0x222222);
+                scene.add(gridHelper);
+
+                // Controls
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.minDistance = 50;
+                controls.maxDistance = 1000;
+
+                // 모든 컨트롤 동기화 (change 이벤트 사용)
+                controls.addEventListener('change', () => {
+                    if (!isSyncing) {
+                        syncCameras(index, camera, controls);
+                    }
+                });
+
+                viewports.push({
+                    scene,
+                    camera,
+                    renderer,
+                    controls,
+                    gridHelper,
+                    mesh: null,
+                    model: model
+                });
+
+                // 모델 로드
+                loadModel(index, model.file);
+            });
+        }
+
+        // 카메라 동기화
+        function syncCameras(sourceIndex, sourceCamera, sourceControls) {
+            isSyncing = true;
+            viewports.forEach((vp, index) => {
+                if (index !== sourceIndex) {
+                    vp.camera.position.copy(sourceCamera.position);
+                    vp.camera.rotation.copy(sourceCamera.rotation);
+                    vp.controls.target.copy(sourceControls.target);
+                    vp.controls.update();
+                }
+            });
+            isSyncing = false;
+        }
+
+        // 모델 로드
+        function loadModel(index, filepath) {
+            console.log(`Loading model ${index}: ${filepath}`);
+            const loader = new OBJLoader();
+            
+            loader.load(
+                filepath,
+                (object) => {
+                    console.log(`Successfully loaded model ${index}: ${filepath}`);
+                    const vp = viewports[index];
+                    
+                    // 기존 메시 제거
+                    if (vp.mesh) {
+                        vp.scene.remove(vp.mesh);
+                    }
+
+                    // 재질 설정
+                    object.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            child.material = new THREE.MeshPhongMaterial({
+                                color: 0x00aaff,
+                                shininess: 30,
+                                flatShading: false
+                            });
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
+                    // 중심 정렬
+                    const box = new THREE.Box3().setFromObject(object);
+                    const center = box.getCenter(new THREE.Vector3());
+                    object.position.sub(center);
+
+                    vp.scene.add(object);
+                    vp.mesh = object;
+
+                    // 정보 표시
+                    updateInfo(index, object);
+
+                    loadedCount++;
+                    updateLoadingText();
+
+                    if (loadedCount === models.length) {
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+                },
+                (xhr) => {
+                    const percent = xhr.total > 0 ? (xhr.loaded / xhr.total * 100).toFixed(2) : 'N/A';
+                    console.log(`${models[index].name}: ${percent}% loaded`);
+                },
+                (error) => {
+                    console.error(`Error loading ${models[index].name} from ${filepath}:`, error);
+                    document.getElementById(`info-${index}`).innerHTML = `<span style="color: #ff4444;">로드 실패</span>`;
+                    loadedCount++;
+                    updateLoadingText();
+                    
+                    if (loadedCount === models.length) {
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+                }
+            );
+        }
+
+        // 로딩 텍스트 업데이트
+        function updateLoadingText() {
+            document.getElementById('loading-text').textContent = 
+                `모델 로딩 중... (${loadedCount}/${models.length})`;
+            console.log(`Loading progress: ${loadedCount}/${models.length}`);
+        }
+
+        // 정보 업데이트
+        function updateInfo(index, object) {
+            let vertexCount = 0;
+            let faceCount = 0;
+
+            object.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    if (child.geometry.attributes.position) {
+                        vertexCount += child.geometry.attributes.position.count;
+                    }
+                    
+                    // 면 개수 계산
+                    if (child.geometry.index) {
+                        // indexed geometry
+                        faceCount += child.geometry.index.count / 3;
+                    } else if (child.geometry.attributes.position) {
+                        // non-indexed geometry
+                        faceCount += child.geometry.attributes.position.count / 3;
+                    }
+                }
+            });
+
+            const infoDiv = document.getElementById(`info-${index}`);
+            infoDiv.innerHTML = `
+                정점: ${vertexCount.toLocaleString()}<br>
+                면: ${Math.floor(faceCount).toLocaleString()}
+            `;
+        }
+
+        // 애니메이션 루프
+        function animate() {
+            requestAnimationFrame(animate);
+
+            viewports.forEach((vp, index) => {
+                if (autoRotateEnabled && vp.mesh) {
+                    vp.mesh.rotation.y += 0.005;
+                }
+                vp.controls.update();
+                vp.renderer.render(vp.scene, vp.camera);
+            });
+        }
+
+        // 윈도우 리사이즈
+        function onWindowResize() {
+            viewports.forEach((vp, index) => {
+                const viewportDiv = document.getElementById(`viewport-${index}`);
+                const width = viewportDiv.clientWidth;
+                const height = viewportDiv.clientHeight;
+
+                vp.camera.aspect = width / height;
+                vp.camera.updateProjectionMatrix();
+                vp.renderer.setSize(width, height);
+            });
+        }
+
+        // 버튼 이벤트 설정
+        function setupControls() {
+            // 카메라 리셋
+            document.getElementById('resetCamera').addEventListener('click', () => {
+                isSyncing = true;
+                viewports.forEach(vp => {
+                    vp.camera.position.set(0, 100, 300);
+                    vp.controls.target.set(0, 0, 0);
+                    vp.controls.update();
+                });
+                isSyncing = false;
+            });
+
+            // 와이어프레임 토글
+            document.getElementById('toggleWireframe').addEventListener('click', function() {
+                wireframeMode = !wireframeMode;
+                this.classList.toggle('active', wireframeMode);
+                
+                viewports.forEach(vp => {
+                    if (vp.mesh) {
+                        vp.mesh.traverse((child) => {
+                            if (child instanceof THREE.Mesh) {
+                                child.material.wireframe = wireframeMode;
+                            }
+                        });
+                    }
+                });
+            });
+
+            // 그리드 토글
+            document.getElementById('toggleGrid').addEventListener('click', function() {
+                showGrid = !showGrid;
+                this.classList.toggle('active', !showGrid);
+                
+                viewports.forEach(vp => {
+                    vp.gridHelper.visible = showGrid;
+                });
+            });
+
+            // 자동 회전
+            document.getElementById('autoRotate').addEventListener('click', function() {
+                autoRotateEnabled = !autoRotateEnabled;
+                this.classList.toggle('active', autoRotateEnabled);
+            });
+        }
+
+        // 이벤트 리스너
+        window.addEventListener('resize', onWindowResize, false);
+
+        // 실행
+        init();
+        setupControls();
+        animate();
+    </script>
+</body>
+</html>

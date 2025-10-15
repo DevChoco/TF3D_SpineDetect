@@ -7,6 +7,7 @@ from PIL import Image
 import cv2
 from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import interp1d
+import os
 
 # 1. OBJ 파일 및 깊이 이미지 로드
 obj_path = 'skplx_SK_test/3d_file/body_mesh_fpfh.obj'
@@ -20,6 +21,44 @@ depth_images_paths = {
     'left': 'skplx_SK_test/여성/여_왼쪽.bmp',
     'right': 'skplx_SK_test/여성/여_오른쪽.bmp'
 }
+
+# 2. 깊이 이미지 경로에서 성별 자동 감지 및 SMPL-X 모델 로드
+def detect_gender_and_load_smplx(depth_image_path):
+    """깊이 이미지 경로에서 성별을 감지하고 해당 SMPL-X 모델 로드"""
+    
+    # 경로에서 성별 키워드 탐지
+    path_lower = depth_image_path.lower()
+    
+    if '여성' in depth_image_path or 'female' in path_lower or '여' in os.path.basename(depth_image_path):
+        gender = 'female'
+        smplx_path = 'skplx_SK_test/smplx/SMPLX_FEMALE.npz'
+    elif '남성' in depth_image_path or 'male' in path_lower or '남' in os.path.basename(depth_image_path):
+        gender = 'male'
+        smplx_path = 'skplx_SK_test/smplx/SMPLX_MALE.npz'
+    else:
+        gender = 'neutral'
+        smplx_path = 'skplx_SK_test/smplx/SMPLX_NEUTRAL.npz'
+    
+    # SMPL-X 모델 로드
+    if os.path.exists(smplx_path):
+        smplx_data = np.load(smplx_path, allow_pickle=True)
+        print(f"\n[SMPL-X 모델 로드]")
+        print(f"  - 감지된 성별: {gender.upper()}")
+        print(f"  - 모델 경로: {smplx_path}")
+        print(f"  - 모델 키: {list(smplx_data.keys())}")
+        
+        # SMPL-X 관절 정보 추출
+        if 'J_regressor' in smplx_data.keys():
+            print(f"  - Joint Regressor 형태: {smplx_data['J_regressor'].shape}")
+        
+        return smplx_data, gender
+    else:
+        print(f"\n[경고] SMPL-X 모델을 찾을 수 없습니다: {smplx_path}")
+        return None, gender
+
+# SMPL-X 모델 로드 (첫 번째 깊이 이미지 경로 기준)
+first_depth_path = depth_images_paths['front']
+smplx_model, detected_gender = detect_gender_and_load_smplx(first_depth_path)
 
 print("="*80)
 print("깊이 이미지 기반 정밀 척추 스켈레톤 추출 시스템")
@@ -61,10 +100,81 @@ print(f"  - 전체 높이 (Y): {height:.2f} mm")
 print(f"  - 좌우 폭 (X): {x_width:.2f} mm, 중심: {x_center:.2f}")
 print(f"  - 전후 깊이 (Z): {z_depth:.2f} mm, 중심: {z_center:.2f}")
 
-# 4. 깊이 이미지로부터 척추 중심선 추출
+# 4. SMPL-X 기반 척추 중심선 추출 (우선)
 print("\n" + "="*80)
-print("깊이 이미지 기반 척추 중심선 추출")
+print("척추 중심선 추출")
 print("="*80)
+
+def extract_spine_from_smplx(smplx_data, vertices):
+    """SMPL-X 모델에서 자연스러운 척추 곡선 추출"""
+    if smplx_data is None:
+        return None
+    
+    try:
+        joint_regressor = smplx_data['J_regressor']
+        if hasattr(joint_regressor, 'toarray'):
+            joint_regressor = joint_regressor.toarray()
+        
+        joints_3d = np.dot(joint_regressor, vertices)
+        
+        # SMPL-X 주요 척추 관절
+        pelvis = joints_3d[0]      # 골반
+        spine1 = joints_3d[3]      # 하부 척추 (L1-L2)
+        spine2 = joints_3d[6]      # 중부 척추 (T6-T7)
+        spine3 = joints_3d[9]      # 상부 척추 (C7-T1)
+        neck = joints_3d[12]       # 목
+        head = joints_3d[15]       # 머리
+        
+        # 척추 경로 생성 (아래에서 위로)
+        spine_keypoints = [
+            pelvis,
+            pelvis + (spine1 - pelvis) * 0.3,   # 천골
+            pelvis + (spine1 - pelvis) * 0.6,   # 하부 요추
+            spine1,                              # 중부 요추
+            spine1 + (spine2 - spine1) * 0.4,   # 상부 요추
+            spine1 + (spine2 - spine1) * 0.7,   # 하부 흉추
+            spine2,                              # 중부 흉추
+            spine2 + (spine3 - spine2) * 0.5,   # 상부 흉추
+            spine3,                              # 하부 경추
+            spine3 + (neck - spine3) * 0.5,     # 중부 경추
+            neck,                                # 상부 경추
+            neck + (head - neck) * 0.3           # 두개골 기저
+        ]
+        
+        spine_keypoints = np.array(spine_keypoints)
+        
+        # 스플라인 보간으로 부드러운 곡선 생성
+        from scipy.interpolate import CubicSpline
+        
+        # Y 좌표 기준 정렬
+        sorted_indices = np.argsort(spine_keypoints[:, 1])
+        spine_sorted = spine_keypoints[sorted_indices]
+        
+        # Y 값을 기준으로 X, Z를 보간
+        y_values = spine_sorted[:, 1]
+        x_values = spine_sorted[:, 0]
+        z_values = spine_sorted[:, 2]
+        
+        # 50개 포인트로 스플라인 보간
+        y_dense = np.linspace(y_values.min(), y_values.max(), 50)
+        
+        cs_x = CubicSpline(y_values, x_values, bc_type='natural')
+        cs_z = CubicSpline(y_values, z_values, bc_type='natural')
+        
+        x_dense = cs_x(y_dense)
+        z_dense = cs_z(y_dense)
+        
+        spine_centerline = np.column_stack([x_dense, y_dense, z_dense])
+        
+        print(f"  [SMPL-X 기반 척추 중심선 생성 성공]")
+        print(f"  - 키포인트: {len(spine_keypoints)}")
+        print(f"  - 보간된 포인트: {len(spine_centerline)}")
+        
+        return spine_centerline
+        
+    except Exception as e:
+        print(f"  [SMPL-X 척추 추출 오류: {e}]")
+        return None
 
 def extract_spine_from_depth_images(depth_front, depth_back, depth_left, depth_right):
     """4방향 깊이 이미지로부터 정확한 척추 위치 추출"""
@@ -156,14 +266,23 @@ def extract_spine_from_depth_images(depth_front, depth_back, depth_left, depth_r
     
     return spine_positions
 
-spine_centerline = extract_spine_from_depth_images(
-    depth_images['front'], 
-    depth_images['back'], 
-    depth_images['left'], 
-    depth_images['right']
-)
+# 척추 중심선 추출: SMPL-X 우선
+if smplx_model is not None:
+    print(f"\n[SMPL-X 기반 척추 중심선 추출 시도]")
+    spine_centerline = extract_spine_from_smplx(smplx_model, vertices)
+else:
+    spine_centerline = None
 
-print(f"  - 최종 척추 중심선 포인트: {len(spine_centerline)}")
+# Fallback: 깊이 이미지 기반
+if spine_centerline is None:
+    print(f"\n[깊이 이미지 기반 척추 중심선 추출]")
+    spine_centerline = extract_spine_from_depth_images(
+        depth_images['front'], 
+        depth_images['back'], 
+        depth_images['left'], 
+        depth_images['right']
+    )
+    print(f"  - 최종 척추 중심선 포인트: {len(spine_centerline)}")
 
 # 5. 척추뼈별 관절 위치 추정
 print("\n" + "="*80)
@@ -220,28 +339,196 @@ for name, h in cervical_heights.items():
     print(f"  {name:15s}: {joints[name]}")
 
 print(f"\n[흉추 (Thoracic Vertebrae) - 12개]")
-thoracic_heights = np.linspace(0.79, 0.50, 12)
-for i, h in enumerate(thoracic_heights, 1):
-    joint_name = f'T{i}'
-    joints[joint_name] = get_spine_position_at_height(h, spine_centerline, y_min, height)
-    print(f"  {joint_name:4s}:              {joints[joint_name]}")
+
+# SMPL-X 기반 흉추 추출
+if smplx_model is not None:
+    try:
+        joint_regressor = smplx_model['J_regressor']
+        if hasattr(joint_regressor, 'toarray'):
+            joint_regressor = joint_regressor.toarray()
+        
+        joints_3d = np.dot(joint_regressor, vertices)
+        
+        # SMPL-X spine joints
+        spine1 = joints_3d[3]  # L1-L2 근처
+        spine2 = joints_3d[6]  # T6-T7 근처
+        spine3 = joints_3d[9]  # C7-T1 근처
+        
+        # T1-T12 분포
+        for i in range(1, 13):
+            if i <= 6:
+                # T1-T6: spine3와 spine2 사이
+                ratio = (7 - i) / 6.0
+                thoracic_pos = spine2 + (spine3 - spine2) * ratio
+            else:
+                # T7-T12: spine2와 spine1 사이
+                ratio = (13 - i) / 6.0
+                thoracic_pos = spine1 + (spine2 - spine1) * ratio
+            
+            joints[f'T{i}'] = thoracic_pos
+            print(f"  T{i:2d} (SMPLX):      {thoracic_pos}")
+            
+    except Exception as e:
+        print(f"  [SMPL-X 흉추 추출 오류: {e}]")
+        thoracic_heights = np.linspace(0.79, 0.68, 12)
+        for i, h in enumerate(thoracic_heights, 1):
+            joint_name = f'T{i}'
+            joints[joint_name] = get_spine_position_at_height(h, spine_centerline, y_min, height)
+            print(f"  {joint_name:4s}:              {joints[joint_name]}")
+else:
+    # Fallback
+    thoracic_heights = np.linspace(0.79, 0.68, 12)
+    for i, h in enumerate(thoracic_heights, 1):
+        joint_name = f'T{i}'
+        joints[joint_name] = get_spine_position_at_height(h, spine_centerline, y_min, height)
+        print(f"  {joint_name:4s}:              {joints[joint_name]}")
 
 print(f"\n[요추 (Lumbar Vertebrae) - 5개]")
-lumbar_heights = np.linspace(0.48, 0.36, 5)
-for i, h in enumerate(lumbar_heights, 1):
-    joint_name = f'L{i}'
-    joints[joint_name] = get_spine_position_at_height(h, spine_centerline, y_min, height)
-    print(f"  {joint_name:4s}:              {joints[joint_name]}")
+
+# SMPL-X 기반 요추 추출 (있는 경우)
+if smplx_model is not None:
+    try:
+        joint_regressor = smplx_model['J_regressor']
+        if hasattr(joint_regressor, 'toarray'):
+            joint_regressor = joint_regressor.toarray()
+        
+        joints_3d = np.dot(joint_regressor, vertices)
+        
+        # SMPL-X spine joints (indices 3, 6, 9)
+        # spine1 (index 3) ~ T12-L1
+        # spine2 (index 6) ~ T6-T7  
+        # spine3 (index 9) ~ C7-T1
+        
+        spine1 = joints_3d[3]  # 하부 척추 (L1-L2 근처)
+        pelvis = joints_3d[0]   # 골반 중심
+        
+        # L1-L5 위치를 pelvis와 spine1 사이에 분포
+        y_diff = spine1[1] - pelvis[1]
+        
+        for i in range(1, 6):
+            # L5가 pelvis에 가깝고, L1이 spine1에 가까움
+            ratio = (6 - i) / 6.0  # L5=0.833, L4=0.667, L3=0.5, L2=0.333, L1=0.167
+            
+            lumbar_pos = pelvis + (spine1 - pelvis) * (0.3 + ratio * 0.6)
+            joints[f'L{i}'] = lumbar_pos
+            print(f"  L{i} (SMPLX):       {lumbar_pos}")
+            
+    except Exception as e:
+        print(f"  [SMPL-X 요추 추출 오류: {e}]")
+        lumbar_heights = np.linspace(0.68, 0.52, 5)
+        for i, h in enumerate(lumbar_heights, 1):
+            joint_name = f'L{i}'
+            joints[joint_name] = get_spine_position_at_height(h, spine_centerline, y_min, height)
+            print(f"  {joint_name:4s}:              {joints[joint_name]}")
+else:
+    # Fallback: 높이 기반 (기존보다 높게 조정)
+    lumbar_heights = np.linspace(0.68, 0.52, 5)
+    for i, h in enumerate(lumbar_heights, 1):
+        joint_name = f'L{i}'
+        joints[joint_name] = get_spine_position_at_height(h, spine_centerline, y_min, height)
+        print(f"  {joint_name:4s}:              {joints[joint_name]}")
 
 print(f"\n[천골/미골 (Sacrum/Coccyx)]")
-joints['S1_sacrum'] = get_spine_position_at_height(0.34, spine_centerline, y_min, height)
-joints['coccyx'] = get_spine_position_at_height(0.31, spine_centerline, y_min, height)
-joints['pelvis_center'] = get_spine_position_at_height(0.33, spine_centerline, y_min, height)
-print(f"  S1 (Sacrum):       {joints['S1_sacrum']}")
-print(f"  Coccyx:            {joints['coccyx']}")
-print(f"  Pelvis Center:     {joints['pelvis_center']}")
 
-# 6. 어깨 및 골반 (깊이 이미지 + 메시 데이터 하이브리드)
+# SMPL-X 기반 골반 중심 추출 (있는 경우)
+if smplx_model is not None:
+    try:
+        joint_regressor = smplx_model['J_regressor']
+        if hasattr(joint_regressor, 'toarray'):
+            joint_regressor = joint_regressor.toarray()
+        
+        joints_3d = np.dot(joint_regressor, vertices)
+        
+        # SMPL-X pelvis joint (index 0)
+        pelvis_smplx = joints_3d[0]
+        joints['pelvis_center'] = pelvis_smplx
+        
+        # S1은 pelvis보다 약간 위 (2-3% 높이)
+        joints['S1_sacrum'] = pelvis_smplx + np.array([0, height * 0.03, 0])
+        
+        # Coccyx는 pelvis보다 약간 아래 (3-4% 높이)
+        joints['coccyx'] = pelvis_smplx - np.array([0, height * 0.04, 0])
+        
+        print(f"  [SMPL-X 기반 골반 추출 성공]")
+        print(f"  Pelvis Center (SMPLX): {joints['pelvis_center']}")
+        print(f"  S1 (Sacrum):           {joints['S1_sacrum']}")
+        print(f"  Coccyx:                {joints['coccyx']}")
+    except Exception as e:
+        print(f"  [SMPL-X 골반 추출 오류: {e}]")
+        # Fallback
+        joints['S1_sacrum'] = get_spine_position_at_height(0.52, spine_centerline, y_min, height)
+        joints['coccyx'] = get_spine_position_at_height(0.48, spine_centerline, y_min, height)
+        joints['pelvis_center'] = get_spine_position_at_height(0.50, spine_centerline, y_min, height)
+        print(f"  S1 (Sacrum):       {joints['S1_sacrum']}")
+        print(f"  Coccyx:            {joints['coccyx']}")
+        print(f"  Pelvis Center:     {joints['pelvis_center']}")
+else:
+    # SMPL-X 없을 때 높이 조정 (기존보다 높게)
+    joints['S1_sacrum'] = get_spine_position_at_height(0.52, spine_centerline, y_min, height)
+    joints['coccyx'] = get_spine_position_at_height(0.48, spine_centerline, y_min, height)
+    joints['pelvis_center'] = get_spine_position_at_height(0.50, spine_centerline, y_min, height)
+    print(f"  S1 (Sacrum):       {joints['S1_sacrum']}")
+    print(f"  Coccyx:            {joints['coccyx']}")
+    print(f"  Pelvis Center:     {joints['pelvis_center']}")
+
+# 6. SMPL-X 기반 어깨 관절 추출 (있는 경우)
+def extract_shoulder_from_smplx(smplx_data, vertices, side='left'):
+    """SMPL-X 모델을 사용하여 정확한 어깨 끝점 추출"""
+    
+    if smplx_data is None:
+        return None
+    
+    try:
+        # SMPL-X 관절 이름 매핑 (표준 SMPL-X joint indices)
+        # 16: left_shoulder, 17: right_shoulder
+        joint_regressor = smplx_data['J_regressor']
+        
+        # 메시 정점으로부터 관절 위치 계산
+        if hasattr(joint_regressor, 'toarray'):
+            joint_regressor = joint_regressor.toarray()
+        
+        joints_3d = np.dot(joint_regressor, vertices)
+        
+        if side == 'left':
+            # Left shoulder joint (index 16)
+            shoulder_joint = joints_3d[16]
+            
+            # 어깨 관절 주변의 가장 외측 정점 찾기
+            y_tol = height * 0.05
+            mask = np.abs(vertices[:, 1] - shoulder_joint[1]) < y_tol
+            mask &= vertices[:, 0] > shoulder_joint[0]  # 관절보다 외측
+            
+            if mask.sum() > 0:
+                outer_verts = vertices[mask]
+                # 가장 외측 점들의 평균
+                sorted_idx = np.argsort(outer_verts[:, 0])
+                top_points = outer_verts[sorted_idx[-5:]]
+                acromion = top_points.mean(axis=0)
+                return acromion
+            else:
+                return shoulder_joint
+        else:
+            # Right shoulder joint (index 17)
+            shoulder_joint = joints_3d[17]
+            
+            y_tol = height * 0.05
+            mask = np.abs(vertices[:, 1] - shoulder_joint[1]) < y_tol
+            mask &= vertices[:, 0] < shoulder_joint[0]  # 관절보다 외측
+            
+            if mask.sum() > 0:
+                outer_verts = vertices[mask]
+                sorted_idx = np.argsort(outer_verts[:, 0])
+                top_points = outer_verts[sorted_idx[:5]]
+                acromion = top_points.mean(axis=0)
+                return acromion
+            else:
+                return shoulder_joint
+                
+    except Exception as e:
+        print(f"  [SMPL-X 어깨 추출 오류: {e}]")
+        return None
+
+# 6. 어깨 및 골반 (SMPL-X + 깊이 이미지 + 메시 데이터 하이브리드)
 print(f"\n[어깨 (Shoulder Girdle)]")
 
 def extract_shoulder_hybrid(y_ratio, depth_front, side='left'):
@@ -304,23 +591,39 @@ def extract_shoulder_hybrid(y_ratio, depth_front, side='left'):
     
     return None
 
-# 어깨 높이를 C7 기준으로 조정
-shoulder_height = 0.78
-joints['left_acromion'] = extract_shoulder_hybrid(shoulder_height, depth_images['front'], 'left')
-joints['right_acromion'] = extract_shoulder_hybrid(shoulder_height, depth_images['front'], 'right')
+# 어깨 추출: SMPL-X 우선, Fallback은 하이브리드 방식
+shoulder_height = 0.83
 
-if joints['left_acromion'] is not None:
-    print(f"  Left Acromion:     {joints['left_acromion']}")
-else:
-    print(f"  Left Acromion:     Not detected")
+# 1순위: SMPL-X 모델 사용
+if smplx_model is not None:
+    print(f"  [SMPL-X 기반 어깨 추출 시도]")
+    joints['left_acromion'] = extract_shoulder_from_smplx(smplx_model, vertices, 'left')
+    joints['right_acromion'] = extract_shoulder_from_smplx(smplx_model, vertices, 'right')
+    
+    if joints['left_acromion'] is not None:
+        print(f"  ✓ Left Acromion (SMPLX):  {joints['left_acromion']}")
+    if joints['right_acromion'] is not None:
+        print(f"  ✓ Right Acromion (SMPLX): {joints['right_acromion']}")
 
-if joints['right_acromion'] is not None:
-    print(f"  Right Acromion:    {joints['right_acromion']}")
-else:
-    print(f"  Right Acromion:    Not detected")
+# 2순위: Fallback - 하이브리드 방식
+if joints.get('left_acromion') is None:
+    print(f"  [하이브리드 방식으로 왼쪽 어깨 추출]")
+    joints['left_acromion'] = extract_shoulder_hybrid(shoulder_height, depth_images['front'], 'left')
+    if joints['left_acromion'] is not None:
+        print(f"  Left Acromion (Hybrid):   {joints['left_acromion']}")
+    else:
+        print(f"  Left Acromion:            Not detected")
 
-# 견갑골 (등 쪽에서 감지 - 메시 기반)
-scapula_height = 0.72
+if joints.get('right_acromion') is None:
+    print(f"  [하이브리드 방식으로 오른쪽 어깨 추출]")
+    joints['right_acromion'] = extract_shoulder_hybrid(shoulder_height, depth_images['front'], 'right')
+    if joints['right_acromion'] is not None:
+        print(f"  Right Acromion (Hybrid):  {joints['right_acromion']}")
+    else:
+        print(f"  Right Acromion:           Not detected")
+
+# 견갑골 (등 쪽에서 감지 - 메시 기반) - 어깨보다 약간 아래
+scapula_height = 0.78
 mask = np.abs(vertices[:, 1] - (y_min + height * scapula_height)) < height * 0.03
 posterior_mask = mask & (vertices[:, 2] > z_center)
 
@@ -342,7 +645,60 @@ if len(right_scapula) > 5:
         joints['right_scapula_medial'] = right_scapula[medial_mask].mean(axis=0)
         print(f"  Right Scapula:     {joints['right_scapula_medial']}")
 
-print(f"\n[골반 (Pelvis)]")
+print(f"\n[골반 외측 (Pelvis - Iliac Crest)]")
+
+def extract_pelvis_from_smplx(smplx_data, vertices, side='left'):
+    """SMPL-X 골반 관절을 기반으로 장골능 위치 추출"""
+    
+    if smplx_data is None:
+        return None
+    
+    try:
+        joint_regressor = smplx_data['J_regressor']
+        if hasattr(joint_regressor, 'toarray'):
+            joint_regressor = joint_regressor.toarray()
+        
+        joints_3d = np.dot(joint_regressor, vertices)
+        
+        # SMPL-X hip joints (left: 1, right: 2)
+        pelvis_center = joints_3d[0]
+        
+        if side == 'left':
+            left_hip = joints_3d[1]
+            
+            # 장골능은 hip보다 약간 위, 외측
+            y_tol = height * 0.06
+            mask = np.abs(vertices[:, 1] - (left_hip[1] + height * 0.05)) < y_tol
+            mask &= vertices[:, 0] > left_hip[0]  # hip보다 외측
+            
+            if mask.sum() > 0:
+                outer_verts = vertices[mask]
+                sorted_idx = np.argsort(outer_verts[:, 0])
+                top_points = outer_verts[sorted_idx[-8:]]
+                iliac_crest = top_points.mean(axis=0)
+                return iliac_crest
+            else:
+                # Fallback: hip 위치 + offset
+                return left_hip + np.array([x_width * 0.05, height * 0.05, 0])
+        else:
+            right_hip = joints_3d[2]
+            
+            y_tol = height * 0.06
+            mask = np.abs(vertices[:, 1] - (right_hip[1] + height * 0.05)) < y_tol
+            mask &= vertices[:, 0] < right_hip[0]  # hip보다 외측
+            
+            if mask.sum() > 0:
+                outer_verts = vertices[mask]
+                sorted_idx = np.argsort(outer_verts[:, 0])
+                top_points = outer_verts[sorted_idx[:8]]
+                iliac_crest = top_points.mean(axis=0)
+                return iliac_crest
+            else:
+                return right_hip + np.array([-x_width * 0.05, height * 0.05, 0])
+                
+    except Exception as e:
+        print(f"  [SMPL-X 골반 추출 오류: {e}]")
+        return None
 
 def extract_pelvis_hybrid(y_ratio, depth_front, side='left'):
     """깊이 이미지 + 메시 데이터를 결합한 골반 위치 추출"""
@@ -404,19 +760,36 @@ def extract_pelvis_hybrid(y_ratio, depth_front, side='left'):
     
     return None
 
-pelvis_height = 0.35
-joints['left_iliac_crest'] = extract_pelvis_hybrid(pelvis_height, depth_images['front'], 'left')
-joints['right_iliac_crest'] = extract_pelvis_hybrid(pelvis_height, depth_images['front'], 'right')
+# 골반 장골능 추출: SMPL-X 우선
+pelvis_height = 0.54  # 높이 조정
 
-if joints['left_iliac_crest'] is not None:
-    print(f"  Left Iliac Crest:  {joints['left_iliac_crest']}")
-else:
-    print(f"  Left Iliac Crest:  Not detected")
+# 1순위: SMPL-X 모델 사용
+if smplx_model is not None:
+    print(f"  [SMPL-X 기반 골반 추출 시도]")
+    joints['left_iliac_crest'] = extract_pelvis_from_smplx(smplx_model, vertices, 'left')
+    joints['right_iliac_crest'] = extract_pelvis_from_smplx(smplx_model, vertices, 'right')
+    
+    if joints['left_iliac_crest'] is not None:
+        print(f"  ✓ Left Iliac Crest (SMPLX):  {joints['left_iliac_crest']}")
+    if joints['right_iliac_crest'] is not None:
+        print(f"  ✓ Right Iliac Crest (SMPLX): {joints['right_iliac_crest']}")
 
-if joints['right_iliac_crest'] is not None:
-    print(f"  Right Iliac Crest: {joints['right_iliac_crest']}")
-else:
-    print(f"  Right Iliac Crest: Not detected")
+# 2순위: Fallback
+if joints.get('left_iliac_crest') is None:
+    print(f"  [하이브리드 방식으로 왼쪽 골반 추출]")
+    joints['left_iliac_crest'] = extract_pelvis_hybrid(pelvis_height, depth_images['front'], 'left')
+    if joints['left_iliac_crest'] is not None:
+        print(f"  Left Iliac Crest (Hybrid):   {joints['left_iliac_crest']}")
+    else:
+        print(f"  Left Iliac Crest:            Not detected")
+
+if joints.get('right_iliac_crest') is None:
+    print(f"  [하이브리드 방식으로 오른쪽 골반 추출]")
+    joints['right_iliac_crest'] = extract_pelvis_hybrid(pelvis_height, depth_images['front'], 'right')
+    if joints['right_iliac_crest'] is not None:
+        print(f"  Right Iliac Crest (Hybrid):  {joints['right_iliac_crest']}")
+    else:
+        print(f"  Right Iliac Crest:           Not detected")
 
 print(f"\n[목/머리 (Neck/Head)]")
 joints['occipital_base'] = get_spine_position_at_height(0.97, spine_centerline, y_min, height)
@@ -481,11 +854,11 @@ print("\n" + "="*80)
 print("3D 시각화 생성")
 print("="*80)
 
-o3d_mesh = o3d.geometry.TriangleMesh()
-o3d_mesh.vertices = o3d.utility.Vector3dVector(vertices)
-o3d_mesh.triangles = o3d.utility.Vector3iVector(mesh.faces)
-o3d_mesh.compute_vertex_normals()
-o3d_mesh.paint_uniform_color([0.9, 0.9, 0.9])
+# 메시 대신 포인트 클라우드로 표시
+point_cloud = o3d.geometry.PointCloud()
+point_cloud.points = o3d.utility.Vector3dVector(vertices)
+# 정점에 회색 색상 지정
+point_cloud.paint_uniform_color([0.7, 0.7, 0.7])
 
 line_set = o3d.geometry.LineSet()
 line_set.points = o3d.utility.Vector3dVector(joints_array)
@@ -557,7 +930,7 @@ print("  🟣 마젠타: 깊이 이미지 기반 척추 중심선")
 vis = o3d.visualization.Visualizer()
 vis.create_window(window_name="깊이 이미지 기반 정밀 척추 분석", width=1600, height=1000)
 
-all_geometries = ([o3d_mesh, line_set, spine_line, coordinate_frame] + 
+all_geometries = ([point_cloud, line_set, spine_line, coordinate_frame] + 
                   cervical_spheres + thoracic_spheres + lumbar_spheres + 
                   sacral_spheres + girdle_spheres)
 
@@ -567,7 +940,7 @@ for geom in all_geometries:
 render_option = vis.get_render_option()
 render_option.mesh_show_back_face = True
 render_option.line_width = 10.0
-render_option.point_size = 8.0
+render_option.point_size = 3.0  # 정점 크기 설정
 render_option.background_color = np.array([0.02, 0.02, 0.02])
 
 vis.run()
@@ -729,7 +1102,8 @@ import json
 
 medical_data = {
     'metadata': {
-        'method': 'Depth image based precise spine extraction',
+        'method': 'SMPL-X + Depth image based precise spine extraction',
+        'smplx_model_used': detected_gender.upper() if smplx_model is not None else 'None',
         'depth_images_used': list(depth_images_paths.keys()),
         'body_height_mm': float(height),
         'spine_centerline_samples': len(spine_centerline)
