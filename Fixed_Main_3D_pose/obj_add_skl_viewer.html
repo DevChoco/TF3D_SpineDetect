@@ -90,6 +90,7 @@
             gap: 2px;
             background-color: #000;
             padding: 2px;
+            height: calc(100vh - 150px);
         }
         .viewport {
             position: relative;
@@ -234,6 +235,11 @@
                 <div class="viewport-quality" id="quality-4"></div>
                 <div class="viewport-info" id="info-4"></div>
             </div>
+            <div class="viewport" id="viewport-5">
+                <div class="viewport-label">Ultra High</div>
+                <div class="viewport-quality" id="quality-5"></div>
+                <div class="viewport-info" id="info-5"></div>
+            </div>
         </div>
     </div>
 
@@ -251,38 +257,43 @@
         import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // 현재 프레임 번호 (0~59)
+        // 현재 프레임 번호 (사용 안 함 - 단일 모델만 존재)
         let currentFrame = 0;
-        const totalFrames = 60;
+        const totalFrames = 1;
 
-        // 모델 파일 설정 함수 (프레임 번호에 따라 동적 생성)
+        // 모델 파일 설정 (프레임별 폴더 없이 단일 모델)
         function getModelsForFrame(frameNum) {
-            const frameStr = String(frameNum).padStart(3, '0');
+            // 실제 파일 구조: output/3d_models/body_mesh_fpfh_*.obj
             return [
                 { 
                     name: 'Ultra Low', 
-                    file: `output/3d_models/frame_${frameStr}/body_mesh_frame_${frameNum}_ultra_low.obj`, 
-                    skeletonFile: `output/3d_models/frame_${frameStr}/skeleton_data_ultra_low.json` 
+                    file: `output/3d_models/body_mesh_fpfh_ultra_low.obj`, 
+                    skeletonFile: `output/3d_models/skeleton_data_ultra_low.json` 
                 },
                 { 
                     name: 'Low', 
-                    file: `output/3d_models/frame_${frameStr}/body_mesh_frame_${frameNum}_low.obj`, 
-                    skeletonFile: `output/3d_models/frame_${frameStr}/skeleton_data_low.json` 
+                    file: `output/3d_models/body_mesh_fpfh_low.obj`, 
+                    skeletonFile: `output/3d_models/skeleton_data_low.json` 
                 },
                 { 
                     name: 'Medium', 
-                    file: `output/3d_models/frame_${frameStr}/body_mesh_frame_${frameNum}_medium.obj`, 
-                    skeletonFile: `output/3d_models/frame_${frameStr}/skeleton_data_medium.json` 
+                    file: `output/3d_models/body_mesh_fpfh_medium.obj`, 
+                    skeletonFile: `output/3d_models/skeleton_data_medium.json` 
                 },
                 { 
                     name: 'Default', 
-                    file: `output/3d_models/frame_${frameStr}/body_mesh_frame_${frameNum}.obj`, 
-                    skeletonFile: `output/3d_models/frame_${frameStr}/skeleton_data_default.json` 
+                    file: `output/3d_models/body_mesh_fpfh_default.obj`, 
+                    skeletonFile: `output/3d_models/skeleton_data_default.json` 
                 },
                 { 
                     name: 'High', 
-                    file: `output/3d_models/frame_${frameStr}/body_mesh_frame_${frameNum}_high.obj`, 
-                    skeletonFile: `output/3d_models/frame_${frameStr}/skeleton_data_high.json` 
+                    file: `output/3d_models/body_mesh_fpfh_high.obj`, 
+                    skeletonFile: `output/3d_models/skeleton_data_high.json` 
+                },
+                { 
+                    name: 'Ultra High', 
+                    file: `output/3d_models/body_mesh_fpfh_ultra_high.obj`, 
+                    skeletonFile: `output/3d_models/skeleton_data_ultra_high.json` 
                 }
             ];
         }
@@ -723,91 +734,6 @@
             const quality = skeletonData.quality_metrics;
             const angles = quality.angles || {};
             
-            // 척추 각도 품질 점수 계산 (0-100)
-            let qualityScore = 0;
-            let scoreCount = 0;
-            
-            // 경추 전만각 평가 (정상: 35-45°)
-            if (angles.cervical_lordosis !== undefined) {
-                const cervical = angles.cervical_lordosis;
-                if (cervical >= 35 && cervical <= 45) {
-                    qualityScore += 100;
-                } else if (cervical >= 30 && cervical <= 50) {
-                    qualityScore += 80;
-                } else if (cervical >= 25 && cervical <= 55) {
-                    qualityScore += 60;
-                } else {
-                    qualityScore += 40;
-                }
-                scoreCount++;
-            }
-            
-            // 흉추 후만각 평가 (정상: 20-40°)
-            if (angles.thoracic_kyphosis !== undefined) {
-                const thoracic = angles.thoracic_kyphosis;
-                if (thoracic >= 20 && thoracic <= 40) {
-                    qualityScore += 100;
-                } else if (thoracic >= 15 && thoracic <= 50) {
-                    qualityScore += 80;
-                } else if (thoracic >= 10 && thoracic <= 60) {
-                    qualityScore += 60;
-                } else {
-                    qualityScore += 40;
-                }
-                scoreCount++;
-            }
-            
-            // 요추 전만각 평가 (정상: 40-60°)
-            if (angles.lumbar_lordosis !== undefined) {
-                const lumbar = angles.lumbar_lordosis;
-                if (lumbar >= 40 && lumbar <= 60) {
-                    qualityScore += 100;
-                } else if (lumbar >= 35 && lumbar <= 65) {
-                    qualityScore += 80;
-                } else if (lumbar >= 30 && lumbar <= 70) {
-                    qualityScore += 60;
-                } else {
-                    qualityScore += 40;
-                }
-                scoreCount++;
-            }
-            
-            // 척추 정렬도 평가 (정상: 0-10°)
-            if (angles.spine_alignment !== undefined) {
-                const alignment = Math.abs(angles.spine_alignment);
-                if (alignment <= 10) {
-                    qualityScore += 100;
-                } else if (alignment <= 15) {
-                    qualityScore += 80;
-                } else if (alignment <= 20) {
-                    qualityScore += 60;
-                } else {
-                    qualityScore += 40;
-                }
-                scoreCount++;
-            }
-            
-            const avgScore = scoreCount > 0 ? Math.round(qualityScore / scoreCount) : 0;
-            
-            // 점수에 따른 등급 및 색상
-            let grade, gradeClass;
-            if (avgScore >= 90) {
-                grade = 'A (우수)';
-                gradeClass = 'quality-good';
-            } else if (avgScore >= 75) {
-                grade = 'B (양호)';
-                gradeClass = 'quality-fair';
-            } else if (avgScore >= 60) {
-                grade = 'C (보통)';
-                gradeClass = 'quality-fair';
-            } else if (avgScore >= 40) {
-                grade = 'D (미흡)';
-                gradeClass = 'quality-poor';
-            } else {
-                grade = 'F (불량)';
-                gradeClass = 'quality-bad';
-            }
-            
             // Z축 변화량 계산 (척추 곡선의 실제성)
             let zVariation = 0;
             if (skeletonData.points) {
@@ -823,8 +749,8 @@
             }
             
             qualityDiv.innerHTML = `
-                <div class="quality-score ${gradeClass}">
-                    파싱 품질: ${grade} (${avgScore}점)
+                <div style="font-size: 10px; color: #fff; font-weight: bold; margin-bottom: 4px;">
+                    척추 각도 분석
                 </div>
                 <div style="font-size: 9px; color: #ccc;">
                     경추각: ${angles.cervical_lordosis?.toFixed(1) || 'N/A'}° 
@@ -839,7 +765,7 @@
                 </div>
             `;
             
-            console.log(`Viewport ${index} - Quality Score: ${avgScore}, Grade: ${grade}, Z Variation: ${zVariation.toFixed(1)}mm`);
+            console.log(`Viewport ${index} - Cervical: ${angles.cervical_lordosis?.toFixed(1)}°, Thoracic: ${angles.thoracic_kyphosis?.toFixed(1)}°, Lumbar: ${angles.lumbar_lordosis?.toFixed(1)}°, Z Variation: ${zVariation.toFixed(1)}mm`);
         }
 
         // 애니메이션 루프
@@ -943,13 +869,11 @@
 
         // 프레임 정보 업데이트
         function updateFrameInfo() {
-            const frameStr = String(currentFrame).padStart(3, '0');
-            const totalStr = String(totalFrames - 1).padStart(3, '0');
-            document.getElementById('frame-info').textContent = `Frame ${frameStr} / ${totalStr}`;
+            document.getElementById('frame-info').textContent = `Single Model View`;
             
-            // 버튼 활성화/비활성화
-            document.getElementById('prevFrame').disabled = (currentFrame === 0);
-            document.getElementById('nextFrame').disabled = (currentFrame === totalFrames - 1);
+            // 프레임 네비게이션 버튼 비활성화 (단일 모델만 존재)
+            document.getElementById('prevFrame').disabled = true;
+            document.getElementById('nextFrame').disabled = true;
         }
 
         // 새 프레임 로드
