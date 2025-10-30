@@ -684,4 +684,18 @@ def main():
         xray_path = os.path.join(debug_dir, "xray_overlay.png")
         generate_xray_snapshot(mesh, skeleton_pcd, skeleton_cylinders, xray_path)
 
-        # 6단계: �
+        # 6단계: 결과 시각화
+        visualize_results(merged_cloud, mesh, skeleton_pcd, skeleton_cylinders)
+        
+        print("\n="*30)
+        print("     3D 자세 분석이 완료되었습니다!")
+        print("="*30)
+        
+    except Exception as e:
+        print(f"\n오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    main()

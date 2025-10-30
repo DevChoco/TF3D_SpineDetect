@@ -427,4 +427,67 @@ def create_and_save_mesh(pcd, output_dir="output/3d_models", base_filename="body
             optimized_mesh = smart_vertex_reduction(optimized_mesh, target_ratio=reduction_ratio, quality_priority=True)
             
         elif optimization_level == "fast":
-            # 빠른 모드:
+            # 빠른 모드: 기본 리덕션
+            optimized_mesh = smart_vertex_reduction(mesh, target_ratio=reduction_ratio, quality_priority=False)
+            
+        else:  # standard
+            # 표준 모드: 균형잡힌 리덕션
+            optimized_mesh = smart_vertex_reduction(mesh, target_ratio=reduction_ratio, quality_priority=True)
+        
+        # 4단계: 품질 분석
+        if enable_quality_analysis:
+            quality_info = measure_optimization_quality(mesh, optimized_mesh)
+            print(f"\n=== 최종 최적화 결과 ===")
+            print(f"버텍스 감소: {quality_info['vertex_reduction_percent']:.1f}%")
+            print(f"삼각형 감소: {quality_info['triangle_reduction_percent']:.1f}%")
+            print(f"표면적 보존: {quality_info['area_preservation_percent']:.1f}%")
+            print(f"전체 품질 점수: {quality_info['overall_quality_score']:.1f}/100")
+            
+            # 홀 채우기 정보 추가
+            if enable_hole_filling and 'hole_fill_analysis' in locals():
+                quality_info.update(hole_fill_analysis)
+        else:
+            quality_info = None
+        
+        # 5단계: 기본 메시 저장
+        saved_files = save_optimized_mesh(optimized_mesh, output_dir, base_filename, quality_info)
+        
+        # 6단계: LOD 메시 생성 (선택사항)
+        if create_lod:
+            print("\n=== 다중 LOD 메시 생성 ===")
+            lod_meshes = create_lod_hierarchy(mesh, custom_lod_levels)
+            
+            lod_saved_files = {}
+            for lod_name, lod_mesh in lod_meshes.items():
+                lod_filename = f"{base_filename}_{lod_name}"
+                
+                # LOD별 홀 채우기 적용 (선택적)
+                if enable_hole_filling and lod_name in ["ultra_high", "high"]:
+                    print(f"  {lod_name.upper()} LOD에 홀 채우기 적용 중...")
+                    lod_mesh = advanced_hole_filling(lod_mesh, method="symmetry")  # 빠른 방법 사용
+                
+                # LOD별 품질 분석
+                if enable_quality_analysis:
+                    lod_quality = measure_optimization_quality(mesh, lod_mesh)
+                else:
+                    lod_quality = None
+                
+                # LOD 메시 저장
+                lod_files = save_optimized_mesh(lod_mesh, output_dir, lod_filename, lod_quality)
+                lod_saved_files[lod_name] = lod_files
+                saved_files.extend(lod_files)
+            
+            print(f"\n총 {len(lod_meshes)}개의 LOD 레벨이 생성되었습니다.")
+            print(f"전체 저장된 파일: {len(saved_files)}개")
+        
+        # 7단계: 전체 요약 출력
+        print(f"\n=== 🎉 메시 생성 및 최적화 완료 ===")
+        if enable_hole_filling:
+            print("✅ 뎁스 이미지 한계로 인한 누락 영역 복원 완료")
+        print("✅ 지능형 버텍스 리덕션으로 최적화 완료")
+        print(f"✅ 총 {len(saved_files)}개 파일 저장 완료")
+        
+        return optimized_mesh, saved_files
+    else:
+        print("메시 생성에 실패했습니다.")
+        return None, []
