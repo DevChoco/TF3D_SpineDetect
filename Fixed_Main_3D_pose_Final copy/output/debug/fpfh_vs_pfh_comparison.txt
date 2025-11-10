@@ -1,0 +1,41 @@
+FPFH vs PFH 성능 비교 결과
+================================================================================
+
+FPFH 결과:
+  feature_type: FPFH
+  source_points: 783
+  target_points: 965
+  feature_extraction_time: 0.018520355224609375
+  feature_memory: 0.0006103515625
+  ransac_time: 0.0342411994934082
+  total_time: 0.05276155471801758
+  ransac_fitness: 0.876117496807152
+  ransac_rmse: 6.735828717469461
+  final_fitness: 0.406151832460733
+  final_rmse: 3.0447137967379145
+  correspondence_ratio: 0.406151832460733
+
+PFH 결과:
+  feature_type: PFH
+  source_points: 783
+  target_points: 965
+  feature_extraction_time: 0.023212671279907227
+  feature_memory: 0.0005645751953125
+  ransac_time: 0.03639626502990723
+  total_time: 0.05960893630981445
+  ransac_fitness: 0.7982120051085568
+  ransac_rmse: 7.480830781701026
+  final_fitness: 0.24646596858638745
+  final_rmse: 3.4236177573455535
+  correspondence_ratio: 0.24646596858638745
+
+속도 비교:
+  FPFH 전체 시간: 0.053초
+  PFH 전체 시간: 0.060초
+  속도 비율: 1.13배
+
+정확도 비교:
+  FPFH Fitness: 0.4062
+  PFH Fitness: 0.2465
+  FPFH RMSE: 3.0447mm
+  PFH RMSE: 3.4236mm

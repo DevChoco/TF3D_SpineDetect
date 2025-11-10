@@ -561,11 +561,14 @@ def main():
         print("Point-to-Point ICP 사용")
         
     # 입력 이미지 경로 설정
+    nn = "6"
+    gen = "남"
+
     views = {
-        "front": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_정면\DepthMap0.bmp",
-        "right": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_R\DepthMap0.bmp",
-        "left": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_L\DepthMap0.bmp",
-        "back": r"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\여_후면\DepthMap0.bmp"
+        "front": rf"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\{gen}_정면\DepthMap{nn}.bmp",
+        "right": rf"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\{gen}_R\DepthMap{nn}.bmp",
+        "left": rf"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\{gen}_L\DepthMap{nn}.bmp",
+        "back": rf"D:\Lab2\--final_3D_Body--\3D_Body_Posture_Analysis\test2\DepthMap\{gen}_후면\DepthMap{nn}.bmp"
     }
     
     try:

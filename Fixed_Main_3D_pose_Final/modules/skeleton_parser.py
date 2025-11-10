@@ -477,7 +477,7 @@ def create_skeleton_from_pointcloud(pcd, ai_landmarks=None):
 
 def calculate_spine_angles(skeleton_points):
     """
-    척추의 각종 각도를 계산합니다.
+    척추의 각종 각도를 의학적 Cobb angle 방식으로 계산합니다.
     
     Args:
         skeleton_points (dict): 스켈레톤 포인트 딕셔너리
@@ -487,62 +487,176 @@ def calculate_spine_angles(skeleton_points):
     """
     angles = {}
     
-    # 경추 각도 (목의 전만)
-    cervical_start = np.array(skeleton_points['cervical_C1'])
-    cervical_end = np.array(skeleton_points['cervical_C7'])
-    cervical_vector = cervical_end - cervical_start
-    vertical_vector = np.array([0, -1, 0])  # 수직 아래 방향
+    def calculate_cobb_angle_from_vertebrae(upper_vertebra, lower_vertebra, middle_vertebrae):
+        """
+        실제 Cobb angle 계산: 상위 척추와 하위 척추의 수평선이 이루는 각도
+        
+        의학적 Cobb angle:
+        1. 상위 척추의 상단 끝판(endplate)에 평행선 그리기
+        2. 하위 척추의 하단 끝판에 평행선 그리기
+        3. 두 평행선에 수직인 선을 그림
+        4. 두 수직선이 이루는 각도 = Cobb angle
+        
+        단순화: 척추가 일직선이면 0°, 굽어있으면 양수
+        """
+        upper = np.array(upper_vertebra)
+        lower = np.array(lower_vertebra)
+        
+        # 중간 척추들의 Z좌표 평균 (곡선의 apex 방향)
+        if middle_vertebrae:
+            middle_z = np.mean([np.array(v)[2] for v in middle_vertebrae])
+        else:
+            middle_z = (upper[2] + lower[2]) / 2
+        
+        # 상위 척추에서 중간으로의 벡터 (시상면 YZ 투영)
+        upper_to_mid = np.array([0, (upper[1] + lower[1])/2 - upper[1], middle_z - upper[2]])
+        upper_to_mid_norm = upper_to_mid / (np.linalg.norm(upper_to_mid) + 1e-6)
+        
+        # 중간에서 하위 척추로의 벡터 (시상면 YZ 투영)
+        mid_to_lower = np.array([0, lower[1] - (upper[1] + lower[1])/2, lower[2] - middle_z])
+        mid_to_lower_norm = mid_to_lower / (np.linalg.norm(mid_to_lower) + 1e-6)
+        
+        # 두 벡터의 각도
+        cos_angle = np.clip(np.dot(upper_to_mid_norm, mid_to_lower_norm), -1, 1)
+        angle_rad = math.acos(cos_angle)
+        angle_deg = math.degrees(angle_rad)
+        
+        # 굽은 각도 = 180° - 내각
+        cobb_angle = 180.0 - angle_deg
+        
+        return max(0, cobb_angle)  # 음수 방지
     
-    # 경추 각도 계산 (전만각)
-    cervical_angle = math.degrees(math.acos(np.clip(np.dot(cervical_vector, vertical_vector) / 
-                                                  (np.linalg.norm(cervical_vector) * np.linalg.norm(vertical_vector)), -1, 1)))
-    angles['cervical_lordosis'] = cervical_angle
+    def calculate_cobb_angle_proper(top_point, upper_mid, lower_mid, bottom_point):
+        """
+        의학적으로 정확한 Cobb angle: 4점을 사용한 계산
+        상단 접선과 하단 접선이 이루는 각도
+        
+        Cobb angle = 두 접선이 이루는 각도 (0~180°)
+        척추가 일직선이면 0°, 굽어있으면 양수값
+        """
+        top = np.array(top_point)
+        upper = np.array(upper_mid)
+        lower = np.array(lower_mid)
+        bottom = np.array(bottom_point)
+        
+        # 상단 접선: top → upper 방향 (YZ 평면에 투영)
+        upper_line = upper - top
+        upper_line_yz = np.array([0, upper_line[1], upper_line[2]])
+        upper_line_yz = upper_line_yz / (np.linalg.norm(upper_line_yz) + 1e-6)
+        
+        # 하단 접선: lower → bottom 방향 (YZ 평면에 투영)
+        lower_line = bottom - lower
+        lower_line_yz = np.array([0, lower_line[1], lower_line[2]])
+        lower_line_yz = lower_line_yz / (np.linalg.norm(lower_line_yz) + 1e-6)
+        
+        # 두 접선의 각도
+        cos_angle = np.clip(np.dot(upper_line_yz, lower_line_yz), -1, 1)
+        angle_rad = math.acos(cos_angle)
+        angle_deg = math.degrees(angle_rad)
+        
+        # Cobb angle = 두 접선이 이루는 각도 (그대로 사용)
+        cobb = angle_deg
+        
+        return cobb
     
-    # 흉추 각도 (가슴의 후만)
-    thoracic_start = np.array(skeleton_points['thoracic_T1'])
-    thoracic_end = np.array(skeleton_points['thoracic_T12'])
-    thoracic_vector = thoracic_end - thoracic_start
+    # 경추 전만각 (Cervical Lordosis) - C2~C7
+    # 의학 표준: 20-35° (정상), 10-20° or 35-45° (주의), <10° or >45° (비정상)
+    try:
+        c2 = skeleton_points['cervical_C2']
+        c3 = skeleton_points['cervical_C3']
+        c4 = skeleton_points['cervical_C4']
+        c5 = skeleton_points['cervical_C5']
+        c6 = skeleton_points['cervical_C6']
+        c7 = skeleton_points['cervical_C7']
+        
+        # C2-C3을 상단 접선, C6-C7을 하단 접선으로 사용
+        cervical_angle = calculate_cobb_angle_proper(c2, c3, c6, c7)
+        angles['cervical_lordosis'] = cervical_angle
+    except KeyError as e:
+        print(f"  경추 각도 계산 실패: {e}")
+        angles['cervical_lordosis'] = 0.0
     
-    thoracic_angle = math.degrees(math.acos(np.clip(np.dot(thoracic_vector, vertical_vector) / 
-                                                   (np.linalg.norm(thoracic_vector) * np.linalg.norm(vertical_vector)), -1, 1)))
-    angles['thoracic_kyphosis'] = thoracic_angle
+    # 흉추 후만각 (Thoracic Kyphosis) - T1~T12
+    # 의학 표준: 20-40° (정상), 15-20° or 40-55° (주의), <15° or >55° (비정상)
+    try:
+        t1 = skeleton_points['thoracic_T1']
+        t2 = skeleton_points.get('thoracic_T2', t1)
+        t11 = skeleton_points.get('thoracic_T11', None)
+        t12 = skeleton_points['thoracic_T12']
+        
+        if t11 is None:
+            t11 = t12
+        
+        # T1-T2를 상단 접선, T11-T12를 하단 접선으로 사용
+        thoracic_angle = calculate_cobb_angle_proper(t1, t2, t11, t12)
+        angles['thoracic_kyphosis'] = thoracic_angle
+    except KeyError as e:
+        print(f"  흉추 각도 계산 실패: {e}")
+        angles['thoracic_kyphosis'] = 0.0
     
-    # 요추 각도 (허리의 전만)
-    lumbar_start = np.array(skeleton_points['lumbar_L1'])
-    lumbar_end = np.array(skeleton_points['lumbar_L5'])
-    lumbar_vector = lumbar_end - lumbar_start
+    # 요추 전만각 (Lumbar Lordosis) - L1~L5
+    # 의학 표준: 40-60° (정상), 30-40° or 60-70° (주의), <30° or >70° (비정상)
+    try:
+        l1 = skeleton_points['lumbar_L1']
+        l2 = skeleton_points.get('lumbar_L2', l1)
+        l4 = skeleton_points.get('lumbar_L4', None)
+        l5 = skeleton_points['lumbar_L5']
+        
+        if l4 is None:
+            l4 = l5
+        
+        # L1-L2를 상단 접선, L4-L5를 하단 접선으로 사용
+        lumbar_angle = calculate_cobb_angle_proper(l1, l2, l4, l5)
+        angles['lumbar_lordosis'] = lumbar_angle
+    except KeyError as e:
+        print(f"  요추 각도 계산 실패: {e}")
+        angles['lumbar_lordosis'] = 0.0
     
-    lumbar_angle = math.degrees(math.acos(np.clip(np.dot(lumbar_vector, vertical_vector) / 
-                                                 (np.linalg.norm(lumbar_vector) * np.linalg.norm(vertical_vector)), -1, 1)))
-    angles['lumbar_lordosis'] = lumbar_angle
+    # 어깨 수평도 (Shoulder Level)
+    # 의학 표준: ≤2° (정상), 2-10° (주의), >10° (비정상)
+    try:
+        left_shoulder = np.array(skeleton_points['left_shoulder'])
+        right_shoulder = np.array(skeleton_points['right_shoulder'])
+        shoulder_vector = right_shoulder - left_shoulder
+        
+        # Y축(높이) 차이를 이용한 각도 계산
+        height_diff = abs(shoulder_vector[1])
+        horizontal_dist = math.sqrt(shoulder_vector[0]**2 + shoulder_vector[2]**2)
+        shoulder_angle = math.degrees(math.atan2(height_diff, horizontal_dist))
+        angles['shoulder_level'] = shoulder_angle
+    except KeyError:
+        angles['shoulder_level'] = 0.0
     
-    # 어깨 각도
-    left_shoulder = np.array(skeleton_points['left_shoulder'])
-    right_shoulder = np.array(skeleton_points['right_shoulder'])
-    shoulder_vector = right_shoulder - left_shoulder
-    horizontal_vector = np.array([1, 0, 0])  # 수평 방향
+    # 골반 기울기 (Pelvic Tilt)
+    # 의학 표준: ≤3° (정상), 3-10° (주의), >10° (비정상)
+    try:
+        left_hip = np.array(skeleton_points['left_hip'])
+        right_hip = np.array(skeleton_points['right_hip'])
+        pelvis_vector = right_hip - left_hip
+        
+        # Y축(높이) 차이를 이용한 각도 계산
+        height_diff = abs(pelvis_vector[1])
+        horizontal_dist = math.sqrt(pelvis_vector[0]**2 + pelvis_vector[2]**2)
+        pelvis_angle = math.degrees(math.atan2(height_diff, horizontal_dist))
+        angles['pelvis_tilt'] = pelvis_angle
+    except KeyError:
+        angles['pelvis_tilt'] = 0.0
     
-    shoulder_angle = math.degrees(math.acos(np.clip(np.dot(shoulder_vector, horizontal_vector) / 
-                                                   (np.linalg.norm(shoulder_vector) * np.linalg.norm(horizontal_vector)), -1, 1)))
-    angles['shoulder_level'] = shoulder_angle
-    
-    # 골반 각도
-    left_hip = np.array(skeleton_points['left_hip'])
-    right_hip = np.array(skeleton_points['right_hip'])
-    pelvis_vector = right_hip - left_hip
-    
-    pelvis_angle = math.degrees(math.acos(np.clip(np.dot(pelvis_vector, horizontal_vector) / 
-                                                 (np.linalg.norm(pelvis_vector) * np.linalg.norm(horizontal_vector)), -1, 1)))
-    angles['pelvis_tilt'] = pelvis_angle
-    
-    # 전체 척추 정렬 (머리에서 골반까지)
-    head_top = np.array(skeleton_points['head_top'])
-    pelvis_center = np.array(skeleton_points['pelvis_center'])
-    spine_vector = pelvis_center - head_top
-    
-    spine_alignment = math.degrees(math.acos(np.clip(np.dot(spine_vector, vertical_vector) / 
-                                                    (np.linalg.norm(spine_vector) * np.linalg.norm(vertical_vector)), -1, 1)))
-    angles['spine_alignment'] = spine_alignment
+    # 척추 정렬도 SVA (Sagittal Vertical Axis) - cm 단위
+    # 의학 표준: <4cm (정상), 4-6cm (주의), >6cm (비정상)
+    try:
+        head_top = np.array(skeleton_points['head_top'])
+        pelvis_center = np.array(skeleton_points['pelvis_center'])
+        
+        # X-Z 평면에서의 수평 거리 (앞뒤/좌우 방향)
+        horizontal_offset = math.sqrt((head_top[0] - pelvis_center[0])**2 + 
+                                     (head_top[2] - pelvis_center[2])**2)
+        
+        # mm를 cm로 변환 (스켈레톤 좌표가 mm 단위라고 가정)
+        sva_cm = horizontal_offset / 10.0
+        angles['spine_alignment'] = sva_cm
+    except KeyError:
+        angles['spine_alignment'] = 0.0
     
     return angles
 
@@ -760,66 +874,140 @@ def create_skeleton_visualization(skeleton_points):
 
 def print_angles(angles):
     """
-    계산된 각도들을 출력합니다.
+    계산된 각도들을 의학 표준에 따라 출력합니다.
+    Table 4 기준: 정상(Normal), 주의(Caution), 비정상(Abnormal)
     
     Args:
         angles (dict): 각도 분석 결과 딕셔너리
     """
-    print("\n" + "="*50)
-    print("           인체 자세 분석 결과")
-    print("="*50)
+    print("\n" + "="*60)
+    print("           인체 자세 분석 결과 (의학 표준 기준)")
+    print("="*60)
     
-    print(f"\n척추 각도 분석:")
-    print(f"   • 경추 전만각 (Cervical Lordosis): {angles['cervical_lordosis']:.1f}°")
-    print(f"     - 정상 범위: 35-45°")
+    def evaluate_metric(value, normal_range, caution_range, unit="°"):
+        """지표를 평가하여 상태와 색상을 반환"""
+        if unit == "cm":
+            status = "✅ 정상"
+            if value > caution_range[1]:
+                status = "⚠️  주의"
+            if value > normal_range[1]:
+                status = "❌ 비정상"
+        else:
+            status = "✅ 정상"
+            if value < caution_range[0] or value > caution_range[1]:
+                status = "⚠️  주의"
+            if value < normal_range[0] or value > normal_range[1]:
+                status = "❌ 비정상"
+        return status
     
-    print(f"\n   • 흉추 후만각 (Thoracic Kyphosis): {angles['thoracic_kyphosis']:.1f}°")
-    print(f"     - 정상 범위: 20-40°")
+    print(f"\n척추 각도 분석 (Cobb Angle):")
     
-    print(f"\n   • 요추 전만각 (Lumbar Lordosis): {angles['lumbar_lordosis']:.1f}°")
-    print(f"     - 정상 범위: 40-60°")
+    # 경추 전만각 (Cervical Lordosis)
+    cervical = angles['cervical_lordosis']
+    cervical_status = evaluate_metric(cervical, (10, 45), (20, 35))
+    print(f"   • 경추 전만각 (Cervical Lordosis): {cervical:.1f}° {cervical_status}")
+    print(f"     - 정상(Normal): 20-35° | 주의(Caution): 10-20° or 35-45°")
+    print(f"     - 비정상(Abnormal): <10° or >45°")
+    
+    # 흉추 후만각 (Thoracic Kyphosis)
+    thoracic = angles['thoracic_kyphosis']
+    thoracic_status = evaluate_metric(thoracic, (15, 55), (20, 40))
+    print(f"\n   • 흉추 후만각 (Thoracic Kyphosis): {thoracic:.1f}° {thoracic_status}")
+    print(f"     - 정상(Normal): 20-40° | 주의(Caution): 15-20° or 40-55°")
+    print(f"     - 비정상(Abnormal): <15° or >55°")
+    
+    # 요추 전만각 (Lumbar Lordosis)
+    lumbar = angles['lumbar_lordosis']
+    lumbar_status = evaluate_metric(lumbar, (30, 70), (40, 60))
+    print(f"\n   • 요추 전만각 (Lumbar Lordosis): {lumbar:.1f}° {lumbar_status}")
+    print(f"     - 정상(Normal): 40-60° | 주의(Caution): 30-40° or 60-70°")
+    print(f"     - 비정상(Abnormal): <30° or >70°")
     
     print(f"\n어깨 및 골반 분석:")
-    print(f"   • 어깨 수평도 (Shoulder Level): {angles['shoulder_level']:.1f}°")
-    print(f"     - 정상: 0° (완전 수평)")
     
-    print(f"\n   • 골반 기울기 (Pelvis Tilt): {angles['pelvis_tilt']:.1f}°")
-    print(f"     - 정상: 0° (완전 수평)")
+    # 어깨 수평도 (Shoulder Level)
+    shoulder = angles['shoulder_level']
+    shoulder_status = evaluate_metric(shoulder, (0, 10), (0, 2))
+    print(f"   • 어깨 수평도 (Shoulder Level): {shoulder:.1f}° {shoulder_status}")
+    print(f"     - 정상(Normal): ≤2° | 주의(Caution): 2-10° | 비정상(Abnormal): >10°")
+    
+    # 골반 기울기 (Pelvic Tilt)
+    pelvis = angles['pelvis_tilt']
+    pelvis_status = evaluate_metric(pelvis, (0, 10), (0, 3))
+    print(f"\n   • 골반 기울기 (Pelvic Tilt): {pelvis:.1f}° {pelvis_status}")
+    print(f"     - 정상(Normal): ≤3° | 주의(Caution): 3-10° | 비정상(Abnormal): >10°")
     
     print(f"\n전체 척추 정렬:")
-    print(f"   • 척추 정렬도 (Spine Alignment): {angles['spine_alignment']:.1f}°")
-    print(f"     - 정상: 0° (완전 수직)")
     
-    # 자세 평가
-    print(f"\n자세 평가:")
+    # 척추 정렬도 SVA (Sagittal Vertical Axis)
+    sva = angles['spine_alignment']
+    sva_status = evaluate_metric(sva, (0, 6), (0, 4), unit="cm")
+    print(f"   • 척추 정렬도 SVA (Sagittal Vertical Axis): {sva:.1f}cm {sva_status}")
+    print(f"     - 정상(Normal): <4cm | 주의(Caution): 4-6cm | 비정상(Abnormal): >6cm")
+    
+    # 자세 평가 요약
+    print(f"\n자세 평가 요약:")
     issues = []
     
-    if angles['cervical_lordosis'] < 30:
-        issues.append("경추 전만이 부족합니다 (거북목 의심)")
-    elif angles['cervical_lordosis'] > 50:
-        issues.append("경추 전만이 과도합니다")
+    # 경추 평가
+    if cervical < 10 or cervical > 45:
+        if cervical < 10:
+            issues.append(f"❌ 경추 전만 부족 ({cervical:.1f}°) - 거북목 증후군 의심")
+        else:
+            issues.append(f"❌ 경추 과전만 ({cervical:.1f}°)")
+    elif cervical < 20 or cervical > 35:
+        if cervical < 20:
+            issues.append(f"⚠️  경추 전만 약간 부족 ({cervical:.1f}°)")
+        else:
+            issues.append(f"⚠️  경추 전만 약간 과도 ({cervical:.1f}°)")
     
-    if angles['thoracic_kyphosis'] > 45:
-        issues.append("흉추 후만이 과도합니다 (라운드 숄더 의심)")
+    # 흉추 평가
+    if thoracic < 15 or thoracic > 55:
+        if thoracic > 55:
+            issues.append(f"❌ 흉추 과후만 ({thoracic:.1f}°) - 라운드 숄더 의심")
+        else:
+            issues.append(f"❌ 흉추 후만 부족 ({thoracic:.1f}°)")
+    elif thoracic < 20 or thoracic > 40:
+        if thoracic > 40:
+            issues.append(f"⚠️  흉추 후만 약간 과도 ({thoracic:.1f}°)")
+        else:
+            issues.append(f"⚠️  흉추 후만 약간 부족 ({thoracic:.1f}°)")
     
-    if angles['lumbar_lordosis'] < 35:
-        issues.append("요추 전만이 부족합니다")
-    elif angles['lumbar_lordosis'] > 65:
-        issues.append("요추 전만이 과도합니다")
+    # 요추 평가
+    if lumbar < 30 or lumbar > 70:
+        if lumbar < 30:
+            issues.append(f"❌ 요추 전만 부족 ({lumbar:.1f}°) - 평평한 허리")
+        else:
+            issues.append(f"❌ 요추 과전만 ({lumbar:.1f}°)")
+    elif lumbar < 40 or lumbar > 60:
+        if lumbar < 40:
+            issues.append(f"⚠️  요추 전만 약간 부족 ({lumbar:.1f}°)")
+        else:
+            issues.append(f"⚠️  요추 전만 약간 과도 ({lumbar:.1f}°)")
     
-    if abs(angles['shoulder_level']) > 5:
-        issues.append(f"어깨 높이가 불균형합니다 ({angles['shoulder_level']:.1f}°)")
+    # 어깨 평가
+    if shoulder > 10:
+        issues.append(f"❌ 어깨 불균형 심각 ({shoulder:.1f}°)")
+    elif shoulder > 2:
+        issues.append(f"⚠️  어깨 약간 불균형 ({shoulder:.1f}°)")
     
-    if abs(angles['pelvis_tilt']) > 5:
-        issues.append(f"골반이 기울어져 있습니다 ({angles['pelvis_tilt']:.1f}°)")
+    # 골반 평가
+    if pelvis > 10:
+        issues.append(f"❌ 골반 기울기 심각 ({pelvis:.1f}°)")
+    elif pelvis > 3:
+        issues.append(f"⚠️  골반 약간 기울어짐 ({pelvis:.1f}°)")
     
-    if abs(angles['spine_alignment']) > 10:
-        issues.append(f"척추가 기울어져 있습니다 ({angles['spine_alignment']:.1f}°)")
+    # SVA 평가
+    if sva > 6:
+        issues.append(f"❌ 척추 정렬 심각 ({sva:.1f}cm) - 전방/후방 이동 과다")
+    elif sva > 4:
+        issues.append(f"⚠️  척추 약간 정렬 불량 ({sva:.1f}cm)")
     
     if issues:
+        print(f"\n   발견된 문제점:")
         for issue in issues:
-            print(f"   ⚠️  {issue}")
+            print(f"   {issue}")
     else:
-        print(f"   ✅  전반적으로 양호한 자세입니다!")
+        print(f"   ✅ 모든 지표가 정상 범위입니다! 우수한 자세입니다.")
     
-    print("="*50)
+    print("="*60 + "\n")

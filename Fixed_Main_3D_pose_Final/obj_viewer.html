@@ -9,7 +9,7 @@
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
+            background-color: #ffffff;
             color: #ffffff;
             overflow-x: hidden;
         }
@@ -56,12 +56,12 @@
             grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(2, 1fr);
             gap: 2px;
-            background-color: #000;
+            background-color: #868686;
             padding: 2px;
         }
         .viewport {
             position: relative;
-            background-color: #1a1a1a;
+            background-color: #ffffff;
             overflow: hidden;
         }
         .viewport canvas {
@@ -73,10 +73,10 @@
             position: absolute;
             top: 10px;
             left: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(66, 66, 66, 0.493);
             padding: 8px 12px;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 20px;
             font-weight: bold;
             z-index: 10;
             pointer-events: none;
@@ -85,10 +85,10 @@
             position: absolute;
             bottom: 10px;
             left: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(66, 66, 66, 0.493);
             padding: 6px 10px;
             border-radius: 4px;
-            font-size: 11px;
+            font-size: 20px;
             z-index: 10;
             pointer-events: none;
             max-width: calc(100% - 40px);
@@ -161,6 +161,10 @@
                 <div class="viewport-label">High</div>
                 <div class="viewport-info" id="info-4"></div>
             </div>
+            <div class="viewport" id="viewport-5">
+                <div class="viewport-label">Ultra High</div>
+                <div class="viewport-info" id="info-5"></div>
+            </div>
         </div>
     </div>
 
@@ -184,7 +188,8 @@
             { name: 'Low', file: 'output/3d_models/body_mesh_fpfh_low.obj' },
             { name: 'Medium', file: 'output/3d_models/body_mesh_fpfh_medium.obj' },
             { name: 'Default', file: 'output/3d_models/body_mesh_fpfh.obj' },
-            { name: 'High', file: 'output/3d_models/body_mesh_fpfh_high.obj' }
+            { name: 'High', file: 'output/3d_models/body_mesh_fpfh_high.obj' },
+            { name: 'Ultra High', file: 'output/3d_models/body_mesh_fpfh_ultra_high.obj' }
         ];
 
         // 각 뷰포트 설정
@@ -209,7 +214,7 @@
 
                 // Scene
                 const scene = new THREE.Scene();
-                scene.background = new THREE.Color(0x1a1a1a);
+                scene.background = new THREE.Color(0xffffff);
 
                 // Camera
                 const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 10000);
@@ -234,7 +239,7 @@
                 scene.add(directionalLight2);
 
                 // Grid
-                const gridHelper = new THREE.GridHelper(500, 50, 0x444444, 0x222222);
+                const gridHelper = new THREE.GridHelper(500, 50, 0xcccccc, 0xeeeeee);
                 scene.add(gridHelper);
 
                 // Controls
@@ -375,8 +380,8 @@
 
             const infoDiv = document.getElementById(`info-${index}`);
             infoDiv.innerHTML = `
-                정점: ${vertexCount.toLocaleString()}<br>
-                면: ${Math.floor(faceCount).toLocaleString()}
+                Vertex: ${vertexCount.toLocaleString()}<br>
+                Floor: ${Math.floor(faceCount).toLocaleString()}
             `;
         }
 

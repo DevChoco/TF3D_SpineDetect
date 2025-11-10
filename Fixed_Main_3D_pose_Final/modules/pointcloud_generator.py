@@ -116,13 +116,13 @@ def create_point_cloud_from_depth(depth_map, view):
     
     # 뷰에 따라 좌표 변환
     if view == "front":
-        points = np.stack([x, -y, depth_map * scale * 1.1], axis=-1)
+        points = np.stack([x, -y, depth_map * scale], axis=-1)
     elif view == "right":
-        points = np.stack([depth_map * scale * 3, -y, -x], axis=-1)  # 우측 깊이 2배
+        points = np.stack([depth_map * scale * 2.5, -y, -x], axis=-1)  # 우측 깊이 2배
     elif view == "left":
-        points = np.stack([-depth_map * scale * 3, -y, x], axis=-1)  # 좌측 깊이 2배
+        points = np.stack([-depth_map * scale * 2.5, -y, x], axis=-1)  # 좌측 깊이 2배
     elif view == "back":
-        points = np.stack([-x, -y, -depth_map * scale * 1.1], axis=-1)
+        points = np.stack([-x, -y, -depth_map * scale], axis=-1)
 
     # 마스크를 적용하여 유효한 포인트만 선택
     valid_points = points[mask]

@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Body Mesh Viewer - Multiple LOD</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        #container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-bottom: 2px solid #444;
+            text-align: center;
+        }
+        #header h1 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }
+        #frame-control {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        #frame-control button {
+            padding: 8px 16px;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        #frame-control button:hover {
+            background-color: #0055aa;
+        }
+        #frame-control button:disabled {
+            background-color: #333;
+            cursor: not-allowed;
+        }
+        #frame-info {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0066cc;
+            min-width: 150px;
+            text-align: center;
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        #controls button {
+            padding: 8px 16px;
+            background-color: #4a4a4a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #controls button:hover {
+            background-color: #5a5a5a;
+        }
+        #controls button.active {
+            background-color: #0066cc;
+        }
+        #viewports {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 2px;
+            background-color: #000;
+            padding: 2px;
+            height: calc(100vh - 150px);
+        }
+        .viewport {
+            position: relative;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+        .viewport canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+        .viewport-label {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .viewport-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            z-index: 10;
+            pointer-events: none;
+            max-width: calc(100% - 40px);
+        }
+        .viewport-quality {
+            position: absolute;
+            top: 40px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 10px;
+            z-index: 10;
+            pointer-events: none;
+            max-width: calc(100% - 40px);
+            line-height: 1.4;
+        }
+        .quality-score {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .quality-good {
+            color: #00ff00;
+        }
+        .quality-fair {
+            color: #ffff00;
+        }
+        .quality-poor {
+            color: #ff6600;
+        }
+        .quality-bad {
+            color: #ff0000;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+        #loading.hidden {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #0066cc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">모델 로딩 중...</div>
+    </div>
+    
+    <div id="container">
+        <div id="header">
+            <h1>3D Body Mesh Viewer - Multiple LOD Comparison</h1>
+            <div id="frame-control">
+                <button id="prevFrame">◀ 이전 프레임</button>
+                <div id="frame-info">Frame 000 / 059</div>
+                <button id="nextFrame">다음 프레임 ▶</button>
+            </div>
+            <div id="controls">
+                <button id="resetCamera">카메라 리셋</button>
+                <button id="toggleWireframe">와이어프레임 토글</button>
+                <button id="toggleGrid">그리드 토글</button>
+                <button id="toggleSkeleton" class="active">스켈레톤 토글</button>
+                <button id="autoRotate">자동 회전</button>
+            </div>
+        </div>
+        <div id="viewports">
+            <div class="viewport" id="viewport-0">
+                <div class="viewport-label">Ultra Low</div>
+                <div class="viewport-quality" id="quality-0"></div>
+                <div class="viewport-info" id="info-0"></div>
+            </div>
+            <div class="viewport" id="viewport-1">
+                <div class="viewport-label">Low</div>
+                <div class="viewport-quality" id="quality-1"></div>
+                <div class="viewport-info" id="info-1"></div>
+            </div>
+            <div class="viewport" id="viewport-2">
+                <div class="viewport-label">Medium</div>
+                <div class="viewport-quality" id="quality-2"></div>
+                <div class="viewport-info" id="info-2"></div>
+            </div>
+            <div class="viewport" id="viewport-3">
+                <div class="viewport-label">Default</div>
+                <div class="viewport-quality" id="quality-3"></div>
+                <div class="viewport-info" id="info-3"></div>
+            </div>
+            <div class="viewport" id="viewport-4">
+                <div class="viewport-label">High</div>
+                <div class="viewport-quality" id="quality-4"></div>
+                <div class="viewport-info" id="info-4"></div>
+            </div>
+            <div class="viewport" id="viewport-5">
+                <div class="viewport-label">Ultra High</div>
+                <div class="viewport-quality" id="quality-5"></div>
+                <div class="viewport-info" id="info-5"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 현재 프레임 번호 (0~59)
+        let currentFrame = 0;
+        const totalFrames = 60;
+
+        // 모델 파일 설정 함수 (프레임 번호에 따라 동적 생성)
+        function getModelsForFrame(frameNum) {
+            const frameStr = String(frameNum).padStart(3, '0');
+            return [
+                { 
+                    name: 'Ultra Low', 
+                    file: `3d_models/frame_${frameStr}/body_mesh_frame_${frameStr}_ultra_low.obj`, 
+                    skeletonFile: `3d_models/frame_${frameStr}/skeleton_data_ultra_low.json` 
+                },
+                { 
+                    name: 'Low', 
+                    file: `3d_models/frame_${frameStr}/body_mesh_frame_${frameStr}_low.obj`, 
+                    skeletonFile: `3d_models/frame_${frameStr}/skeleton_data_low.json` 
+                },
+                { 
+                    name: 'Medium', 
+                    file: `3d_models/frame_${frameStr}/body_mesh_frame_${frameStr}_medium.obj`, 
+                    skeletonFile: `3d_models/frame_${frameStr}/skeleton_data_medium.json` 
+                },
+                { 
+                    name: 'Default', 
+                    file: `3d_models/frame_${frameStr}/body_mesh_frame_${frameStr}.obj`, 
+                    skeletonFile: `3d_models/frame_${frameStr}/skeleton_data_default.json` 
+                },
+                { 
+                    name: 'High', 
+                    file: `3d_models/frame_${frameStr}/body_mesh_frame_${frameStr}_high.obj`, 
+                    skeletonFile: `3d_models/frame_${frameStr}/skeleton_data_high.json` 
+                },
+                { 
+                    name: 'Ultra High', 
+                    file: `3d_models/frame_${frameStr}/body_mesh_frame_${frameStr}_ultra_high.obj`, 
+                    skeletonFile: `3d_models/frame_${frameStr}/skeleton_data_ultra_high.json` 
+                }
+            ];
+        }
+
+        let models = getModelsForFrame(currentFrame);
+
+        // 각 뷰포트 설정
+        const viewports = [];
+        let wireframeMode = false;
+        let showGrid = true;
+        let autoRotateEnabled = false;
+        let loadedCount = 0;
+        let isSyncing = false;
+        let skeletonDataArray = []; // 각 뷰포트별 스켈레톤 데이터 배열
+        let showSkeleton = true;
+
+        // 초기화
+        function init() {
+            console.log('Initializing viewers...');
+            console.log('THREE:', THREE);
+            console.log('OBJLoader:', OBJLoader);
+            console.log('OrbitControls:', OrbitControls);
+            
+            // 프레임 정보 업데이트
+            updateFrameInfo();
+            
+            models.forEach((model, index) => {
+                // 각 뷰포트별 스켈레톤 데이터 로드
+                loadSkeletonData(index, model.skeletonFile);
+                const viewportDiv = document.getElementById(`viewport-${index}`);
+                const width = viewportDiv.clientWidth;
+                const height = viewportDiv.clientHeight;
+
+                // Scene
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x1a1a1a);
+
+                // Camera
+                const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 10000);
+                camera.position.set(0, 100, 300);
+
+                // Renderer
+                const renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(width, height);
+                renderer.shadowMap.enabled = true;
+                viewportDiv.appendChild(renderer.domElement);
+
+                // Lights
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+
+                const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight1.position.set(100, 100, 50);
+                scene.add(directionalLight1);
+
+                const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight2.position.set(-100, 50, -50);
+                scene.add(directionalLight2);
+
+                // Grid
+                const gridHelper = new THREE.GridHelper(500, 50, 0x444444, 0x222222);
+                scene.add(gridHelper);
+
+                // Controls
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.minDistance = 50;
+                controls.maxDistance = 1000;
+
+                // 모든 컨트롤 동기화 (change 이벤트 사용)
+                controls.addEventListener('change', () => {
+                    if (!isSyncing) {
+                        syncCameras(index, camera, controls);
+                    }
+                });
+
+                viewports.push({
+                    scene,
+                    camera,
+                    renderer,
+                    controls,
+                    gridHelper,
+                    mesh: null,
+                    skeleton: null,
+                    model: model
+                });
+
+                // 모델 로드
+                loadModel(index, model.file);
+            });
+        }
+
+        // 스켈레톤 데이터 로드 (각 뷰포트별)
+        function loadSkeletonData(index, skeletonFile) {
+            console.log(`Loading skeleton data for viewport ${index} from ${skeletonFile}...`);
+            
+            fetch(skeletonFile)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(`Skeleton data for viewport ${index} (${data.lod_level}) loaded successfully`);
+                    skeletonDataArray[index] = data;
+                    
+                    // 품질 정보 표시
+                    updateQualityInfo(index, data);
+                    
+                    // 스켈레톤 데이터가 로드되고 메시도 로드된 경우 스켈레톤 추가
+                    if (viewports[index] && viewports[index].mesh) {
+                        addSkeletonToViewport(index);
+                    }
+                })
+                .catch(error => {
+                    console.warn(`Skeleton data loading failed for viewport ${index}:`, error);
+                    console.log(`Viewport ${index} will work without skeleton visualization`);
+                    skeletonDataArray[index] = null;
+                });
+        }
+
+        // 뷰포트에 스켈레톤 추가
+        function addSkeletonToViewport(index) {
+            const skeletonData = skeletonDataArray[index];
+            
+            if (!skeletonData || !skeletonData.points) {
+                console.log(`No skeleton data for viewport ${index}`);
+                return;
+            }
+            
+            const vp = viewports[index];
+            
+            // 기존 스켈레톤 제거
+            if (vp.skeleton) {
+                vp.scene.remove(vp.skeleton);
+                vp.skeleton = null;
+            }
+            
+            // 메시가 없으면 스켈레톤도 추가하지 않음
+            if (!vp.mesh) {
+                return;
+            }
+            
+            // 메시의 바운딩 박스 계산
+            const meshBox = new THREE.Box3().setFromObject(vp.mesh);
+            const meshCenter = meshBox.getCenter(new THREE.Vector3());
+            const meshSize = meshBox.getSize(new THREE.Vector3());
+            
+            // 스켈레톤의 원래 바운딩 박스 계산
+            let skeletonMinX = Infinity, skeletonMinY = Infinity, skeletonMinZ = Infinity;
+            let skeletonMaxX = -Infinity, skeletonMaxY = -Infinity, skeletonMaxZ = -Infinity;
+            let skeletonCenterX = 0, skeletonCenterY = 0, skeletonCenterZ = 0;
+            let pointCount = 0;
+            
+            for (const [name, point] of Object.entries(skeletonData.points)) {
+                skeletonMinX = Math.min(skeletonMinX, point.x);
+                skeletonMinY = Math.min(skeletonMinY, point.y);
+                skeletonMinZ = Math.min(skeletonMinZ, point.z);
+                skeletonMaxX = Math.max(skeletonMaxX, point.x);
+                skeletonMaxY = Math.max(skeletonMaxY, point.y);
+                skeletonMaxZ = Math.max(skeletonMaxZ, point.z);
+                
+                skeletonCenterX += point.x;
+                skeletonCenterY += point.y;
+                skeletonCenterZ += point.z;
+                pointCount++;
+            }
+            
+            if (pointCount > 0) {
+                skeletonCenterX /= pointCount;
+                skeletonCenterY /= pointCount;
+                skeletonCenterZ /= pointCount;
+            }
+            
+            const skeletonSizeX = skeletonMaxX - skeletonMinX;
+            const skeletonSizeY = skeletonMaxY - skeletonMinY;
+            const skeletonSizeZ = skeletonMaxZ - skeletonMinZ;
+            
+            // 스케일 계산 - JSON에 저장된 원본 메시 높이 정보 사용
+            let scale;
+            if (skeletonData.mesh_info && skeletonData.mesh_info.height) {
+                // JSON에 저장된 원본 메시 높이를 기준으로 정확한 스케일 계산
+                const originalMeshHeight = skeletonData.mesh_info.height;
+                const currentMeshHeight = meshSize.y;
+                
+                // 원본 메시 높이 대비 현재 메시 높이 비율 계산
+                const meshScaleFactor = currentMeshHeight / originalMeshHeight;
+                
+                // 스켈레톤의 원본 높이는 이미 원본 메시에 맞춰져 있으므로
+                // 현재 메시에 맞추기 위해 메시 스케일 팩터만 적용
+                scale = meshScaleFactor;
+                
+                console.log(`Viewport ${index} - Original mesh height:`, originalMeshHeight);
+                console.log(`Viewport ${index} - Current mesh height:`, currentMeshHeight);
+                console.log(`Viewport ${index} - Mesh scale factor:`, meshScaleFactor);
+            } else {
+                // mesh_info가 없는 경우 기존 방식 사용
+                scale = (meshSize.y / skeletonSizeY) * 0.9;
+                console.log(`Viewport ${index} - Using fallback scale calculation`);
+            }
+            
+            // 스켈레톤을 메시와 동일하게 중심으로 이동시키기 위한 오프셋
+            const offsetX = -skeletonCenterX;
+            const offsetY = -skeletonCenterY;
+            const offsetZ = -skeletonCenterZ;
+            
+            // Y축 추가 오프셋 (스켈레톤을 위로 이동)
+            const yAdjustment = meshSize.y * 0.15; // 메시 높이의 5% 위로 이동
+            
+            console.log(`Viewport ${index} - Mesh size:`, meshSize);
+            console.log(`Viewport ${index} - Mesh center:`, meshCenter);
+            console.log(`Viewport ${index} - Y adjustment:`, yAdjustment);
+            console.log(`Viewport ${index} - Skeleton original size:`, {x: skeletonSizeX, y: skeletonSizeY, z: skeletonSizeZ});
+            console.log(`Viewport ${index} - Skeleton original center:`, {x: skeletonCenterX, y: skeletonCenterY, z: skeletonCenterZ});
+            console.log(`Viewport ${index} - Final scale factor:`, scale);
+            console.log(`Viewport ${index} - Offset:`, {x: offsetX, y: offsetY, z: offsetZ});
+            
+            // 스켈레톤 그룹 생성
+            const skeletonGroup = new THREE.Group();
+            
+            // 스켈레톤 포인트 생성 (중심 정렬 및 스케일 적용)
+            const pointsGeometry = new THREE.BufferGeometry();
+            const pointsPositions = [];
+            const pointsColors = [];
+            
+            for (const [name, point] of Object.entries(skeletonData.points)) {
+                // 1. 중심으로 이동 2. 스케일 적용 3. Y축 조정
+                pointsPositions.push(
+                    (point.x + offsetX) * scale,
+                    (point.y + offsetY) * scale + yAdjustment,
+                    (point.z + offsetZ) * scale
+                );
+                pointsColors.push(1.0, 0.2, 0.2); // 빨간색
+            }
+            
+            pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(pointsPositions, 3));
+            pointsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(pointsColors, 3));
+            
+            const pointsMaterial = new THREE.PointsMaterial({
+                size: 12,  // 크기 축소 (15 -> 12)
+                vertexColors: true,
+                sizeAttenuation: false,  // 거리에 따른 크기 변화 비활성화
+                depthTest: false  // 항상 앞에 표시
+            });
+            
+            const points = new THREE.Points(pointsGeometry, pointsMaterial);
+            skeletonGroup.add(points);
+            
+            // 스켈레톤 연결선 생성 (중심 정렬 및 스케일 적용)
+            if (skeletonData.connections) {
+                skeletonData.connections.forEach(connection => {
+                    const [start, end] = connection;
+                    
+                    if (skeletonData.points[start] && skeletonData.points[end]) {
+                        const startPoint = skeletonData.points[start];
+                        const endPoint = skeletonData.points[end];
+                        
+                        // 중심 정렬 및 스케일 적용된 좌표 + Y축 조정
+                        const startVec = new THREE.Vector3(
+                            (startPoint.x + offsetX) * scale,
+                            (startPoint.y + offsetY) * scale + yAdjustment,
+                            (startPoint.z + offsetZ) * scale
+                        );
+                        const endVec = new THREE.Vector3(
+                            (endPoint.x + offsetX) * scale,
+                            (endPoint.y + offsetY) * scale + yAdjustment,
+                            (endPoint.z + offsetZ) * scale
+                        );
+                        
+                        // 실린더로 연결선 생성
+                        const direction = new THREE.Vector3().subVectors(endVec, startVec);
+                        const length = direction.length();
+                        
+                        // 스케일에 따라 실린더 반지름도 조정 (더 작게)
+                        const cylinderRadius = 1.8 * scale / 100;  // 2.5에서 1.8로 축소
+                        
+                        const cylinderGeometry = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, length, 8);
+                        const cylinderMaterial = new THREE.MeshBasicMaterial({
+                            color: 0xff8800,
+                            transparent: false,
+                            depthTest: false  // 항상 앞에 표시
+                        });
+                        const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+                        
+                        // 실린더 위치 및 회전 설정
+                        const midPoint = new THREE.Vector3().addVectors(startVec, endVec).multiplyScalar(0.5);
+                        cylinder.position.copy(midPoint);
+                        
+                        const axis = new THREE.Vector3(0, 1, 0);
+                        direction.normalize();
+                        cylinder.quaternion.setFromUnitVectors(axis, direction);
+                        
+                        skeletonGroup.add(cylinder);
+                    }
+                });
+            }
+            
+            vp.skeleton = skeletonGroup;
+            
+            // 스켈레톤을 항상 메시 위에 렌더링되도록 설정
+            skeletonGroup.renderOrder = 999;
+            
+            vp.scene.add(skeletonGroup);
+            
+            console.log(`Skeleton added to viewport ${index}`);
+        }
+
+        // 카메라 동기화
+        function syncCameras(sourceIndex, sourceCamera, sourceControls) {
+            isSyncing = true;
+            viewports.forEach((vp, index) => {
+                if (index !== sourceIndex) {
+                    vp.camera.position.copy(sourceCamera.position);
+                    vp.camera.rotation.copy(sourceCamera.rotation);
+                    vp.controls.target.copy(sourceControls.target);
+                    vp.controls.update();
+                }
+            });
+            isSyncing = false;
+        }
+
+        // 모델 로드
+        function loadModel(index, filepath) {
+            console.log(`Loading model ${index}: ${filepath}`);
+            const loader = new OBJLoader();
+            
+            loader.load(
+                filepath,
+                (object) => {
+                    console.log(`Successfully loaded model ${index}: ${filepath}`);
+                    const vp = viewports[index];
+                    
+                    // 기존 메시 제거
+                    if (vp.mesh) {
+                        vp.scene.remove(vp.mesh);
+                    }
+
+                    // 재질 설정
+                    object.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            child.material = new THREE.MeshPhongMaterial({
+                                color: 0x00aaff,
+                                shininess: 30,
+                                flatShading: false
+                            });
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
+                    // 중심 정렬
+                    const box = new THREE.Box3().setFromObject(object);
+                    const center = box.getCenter(new THREE.Vector3());
+                    object.position.sub(center);
+
+                    vp.scene.add(object);
+                    vp.mesh = object;
+
+                    // 정보 표시
+                    updateInfo(index, object);
+                    
+                    // 스켈레톤 추가 (데이터가 이미 로드된 경우)
+                    if (skeletonDataArray[index]) {
+                        addSkeletonToViewport(index);
+                    }
+
+                    loadedCount++;
+                    updateLoadingText();
+
+                    if (loadedCount === models.length) {
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+                },
+                (xhr) => {
+                    const percent = xhr.total > 0 ? (xhr.loaded / xhr.total * 100).toFixed(2) : 'N/A';
+                    console.log(`${models[index].name}: ${percent}% loaded`);
+                },
+                (error) => {
+                    console.error(`Error loading ${models[index].name} from ${filepath}:`, error);
+                    document.getElementById(`info-${index}`).innerHTML = `<span style="color: #ff4444;">로드 실패</span>`;
+                    loadedCount++;
+                    updateLoadingText();
+                    
+                    if (loadedCount === models.length) {
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+                }
+            );
+        }
+
+        // 로딩 텍스트 업데이트
+        function updateLoadingText() {
+            document.getElementById('loading-text').textContent = 
+                `모델 로딩 중... (${loadedCount}/${models.length})`;
+            console.log(`Loading progress: ${loadedCount}/${models.length}`);
+        }
+
+        // 정보 업데이트
+        function updateInfo(index, object) {
+            let vertexCount = 0;
+            let faceCount = 0;
+
+            object.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    if (child.geometry.attributes.position) {
+                        vertexCount += child.geometry.attributes.position.count;
+                    }
+                    
+                    // 면 개수 계산
+                    if (child.geometry.index) {
+                        // indexed geometry
+                        faceCount += child.geometry.index.count / 3;
+                    } else if (child.geometry.attributes.position) {
+                        // non-indexed geometry
+                        faceCount += child.geometry.attributes.position.count / 3;
+                    }
+                }
+            });
+
+            const infoDiv = document.getElementById(`info-${index}`);
+            infoDiv.innerHTML = `
+                정점: ${vertexCount.toLocaleString()}<br>
+                면: ${Math.floor(faceCount).toLocaleString()}
+            `;
+        }
+
+        // 품질 정보 업데이트
+        function updateQualityInfo(index, skeletonData) {
+            const qualityDiv = document.getElementById(`quality-${index}`);
+            
+            if (!skeletonData || !skeletonData.quality_metrics) {
+                qualityDiv.innerHTML = '<div style="color: #666;">품질 데이터 없음</div>';
+                return;
+            }
+            
+            const quality = skeletonData.quality_metrics;
+            const angles = quality.angles || {};
+            
+            // Z축 변화량 계산 (척추 곡선의 실제성)
+            let zVariation = 0;
+            if (skeletonData.points) {
+                const spinePoints = Object.entries(skeletonData.points)
+                    .filter(([key]) => key.includes('cervical') || key.includes('thoracic') || key.includes('lumbar'))
+                    .map(([_, point]) => point.z);
+                
+                if (spinePoints.length > 0) {
+                    const minZ = Math.min(...spinePoints);
+                    const maxZ = Math.max(...spinePoints);
+                    zVariation = maxZ - minZ;
+                }
+            }
+            
+            qualityDiv.innerHTML = `
+                <div style="font-size: 10px; color: #fff; font-weight: bold; margin-bottom: 4px;">
+                    척추 각도 분석
+                </div>
+                <div style="font-size: 9px; color: #ccc;">
+                    경추각: ${angles.cervical_lordosis?.toFixed(1) || 'N/A'}° 
+                    (정상: 35-45°)<br>
+                    흉추각: ${angles.thoracic_kyphosis?.toFixed(1) || 'N/A'}° 
+                    (정상: 20-40°)<br>
+                    요추각: ${angles.lumbar_lordosis?.toFixed(1) || 'N/A'}° 
+                    (정상: 40-60°)<br>
+                    정렬도: ${angles.spine_alignment?.toFixed(1) || 'N/A'}° 
+                    (정상: <10°)<br>
+                    척추곡선: ${zVariation.toFixed(1)}mm (변화폭)
+                </div>
+            `;
+            
+            console.log(`Viewport ${index} - Cervical: ${angles.cervical_lordosis?.toFixed(1)}°, Thoracic: ${angles.thoracic_kyphosis?.toFixed(1)}°, Lumbar: ${angles.lumbar_lordosis?.toFixed(1)}°, Z Variation: ${zVariation.toFixed(1)}mm`);
+        }
+
+        // 애니메이션 루프
+        function animate() {
+            requestAnimationFrame(animate);
+
+            viewports.forEach((vp, index) => {
+                if (autoRotateEnabled && vp.mesh) {
+                    vp.mesh.rotation.y += 0.005;
+                }
+                vp.controls.update();
+                vp.renderer.render(vp.scene, vp.camera);
+            });
+        }
+
+        // 윈도우 리사이즈
+        function onWindowResize() {
+            viewports.forEach((vp, index) => {
+                const viewportDiv = document.getElementById(`viewport-${index}`);
+                const width = viewportDiv.clientWidth;
+                const height = viewportDiv.clientHeight;
+
+                vp.camera.aspect = width / height;
+                vp.camera.updateProjectionMatrix();
+                vp.renderer.setSize(width, height);
+            });
+        }
+
+        // 버튼 이벤트 설정
+        function setupControls() {
+            // 프레임 네비게이션
+            document.getElementById('prevFrame').addEventListener('click', () => {
+                if (currentFrame > 0) {
+                    currentFrame--;
+                    loadFrame(currentFrame);
+                }
+            });
+
+            document.getElementById('nextFrame').addEventListener('click', () => {
+                if (currentFrame < totalFrames - 1) {
+                    currentFrame++;
+                    loadFrame(currentFrame);
+                }
+            });
+
+            // 카메라 리셋
+            document.getElementById('resetCamera').addEventListener('click', () => {
+                isSyncing = true;
+                viewports.forEach(vp => {
+                    vp.camera.position.set(0, 100, 300);
+                    vp.controls.target.set(0, 0, 0);
+                    vp.controls.update();
+                });
+                isSyncing = false;
+            });
+
+            // 와이어프레임 토글
+            document.getElementById('toggleWireframe').addEventListener('click', function() {
+                wireframeMode = !wireframeMode;
+                this.classList.toggle('active', wireframeMode);
+                
+                viewports.forEach(vp => {
+                    if (vp.mesh) {
+                        vp.mesh.traverse((child) => {
+                            if (child instanceof THREE.Mesh) {
+                                child.material.wireframe = wireframeMode;
+                            }
+                        });
+                    }
+                });
+            });
+
+            // 그리드 토글
+            document.getElementById('toggleGrid').addEventListener('click', function() {
+                showGrid = !showGrid;
+                this.classList.toggle('active', !showGrid);
+                
+                viewports.forEach(vp => {
+                    vp.gridHelper.visible = showGrid;
+                });
+            });
+
+            // 자동 회전
+            document.getElementById('autoRotate').addEventListener('click', function() {
+                autoRotateEnabled = !autoRotateEnabled;
+                this.classList.toggle('active', autoRotateEnabled);
+            });
+            
+            // 스켈레톤 토글
+            document.getElementById('toggleSkeleton').addEventListener('click', function() {
+                showSkeleton = !showSkeleton;
+                this.classList.toggle('active', showSkeleton);
+                
+                viewports.forEach(vp => {
+                    if (vp.skeleton) {
+                        vp.skeleton.visible = showSkeleton;
+                    }
+                });
+            });
+        }
+
+        // 프레임 정보 업데이트
+        function updateFrameInfo() {
+            const frameStr = String(currentFrame).padStart(3, '0');
+            const totalStr = String(totalFrames - 1).padStart(3, '0');
+            document.getElementById('frame-info').textContent = `Frame ${frameStr} / ${totalStr}`;
+            
+            // 버튼 활성화/비활성화
+            document.getElementById('prevFrame').disabled = (currentFrame === 0);
+            document.getElementById('nextFrame').disabled = (currentFrame === totalFrames - 1);
+        }
+
+        // 새 프레임 로드
+        function loadFrame(frameNum) {
+            console.log(`Loading frame ${frameNum}...`);
+            
+            // 프레임 정보 업데이트
+            updateFrameInfo();
+            
+            // 새 모델 경로 생성
+            models = getModelsForFrame(frameNum);
+            
+            // 로딩 카운터 리셋
+            loadedCount = 0;
+            skeletonDataArray = [];
+            document.getElementById('loading').classList.remove('hidden');
+            
+            // 각 뷰포트의 모델 업데이트
+            models.forEach((model, index) => {
+                // 품질 정보 초기화
+                const qualityDiv = document.getElementById(`quality-${index}`);
+                qualityDiv.innerHTML = '<div style="color: #666;">로딩 중...</div>';
+                
+                // 스켈레톤 데이터 로드
+                loadSkeletonData(index, model.skeletonFile);
+                
+                // 기존 메시와 스켈레톤 제거
+                const vp = viewports[index];
+                if (vp.mesh) {
+                    vp.scene.remove(vp.mesh);
+                    vp.mesh = null;
+                }
+                if (vp.skeleton) {
+                    vp.scene.remove(vp.skeleton);
+                    vp.skeleton = null;
+                }
+                
+                // 새 모델 로드
+                vp.model = model;
+                loadModel(index, model.file);
+            });
+        }
+
+        // 이벤트 리스너
+        window.addEventListener('resize', onWindowResize, false);
+
+        // 실행
+        init();
+        setupControls();
+        animate();
+    </script>
+</body>
+</html>

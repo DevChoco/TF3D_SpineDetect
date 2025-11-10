@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Body Mesh Viewer - Final Voted Skeleton</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #ffffff;
+            overflow: hidden;
+        }
+        #container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #header {
+            padding: 20px 30px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #header h1 {
+            margin: 0 0 15px 0;
+            font-size: 32px;
+            font-weight: 600;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(90deg, #fff, #e0e0e0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        #frame-control {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        #frame-control button {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        #frame-control button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        #frame-control button:disabled {
+            background: rgba(100, 100, 100, 0.5);
+            cursor: not-allowed;
+            transform: none;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        #frame-info {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffffff;
+            min-width: 200px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+        }
+        #controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        #controls button {
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 500;
+            backdrop-filter: blur(5px);
+        }
+        #controls button:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        #controls button.active {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 0 15px rgba(245, 87, 108, 0.5);
+        }
+        #viewport-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            height: calc(100vh - 200px);
+        }
+        #viewport {
+            position: relative;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 1400px;
+            height: 100%;
+        }
+        #viewport canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+            border-radius: 15px;
+        }
+        .viewport-label {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.9) 100%);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 10;
+            pointer-events: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .viewport-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .viewport-quality {
+            position: absolute;
+            top: 70px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 10;
+            pointer-events: none;
+            max-width: 350px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .quality-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #4ade80;
+            text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+        }
+        .quality-metric {
+            margin: 6px 0;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            border-left: 3px solid #4ade80;
+        }
+        .quality-value {
+            font-weight: bold;
+            color: #4ade80;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+        }
+        #loading.hidden {
+            display: none;
+        }
+        .spinner {
+            border: 5px solid rgba(255, 255, 255, 0.2);
+            border-top: 5px solid #ffffff;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 25px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #loading-text {
+            font-size: 20px;
+            font-weight: 500;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">최적 스켈레톤 모델 로딩 중...</div>
+    </div>
+    
+    <div id="container">
+        <div id="header">
+            <h1>
+                🏆 3D Body Mesh - Final Voted Skeleton
+                <span class="badge">ENSEMBLE</span>
+            </h1>
+            <div id="controls">
+                <button id="resetCamera">카메라 리셋</button>
+                <button id="toggleWireframe">와이어프레임 토글</button>
+                <button id="toggleGrid">그리드 토글</button>
+                <button id="toggleSkeleton" class="active">스켈레톤 토글</button>
+                <button id="autoRotate">자동 회전</button>
+            </div>
+        </div>
+        <div id="viewport-container">
+            <div id="viewport">
+                <div class="viewport-label">Default Quality - Voted Skeleton</div>
+                <div class="viewport-quality" id="quality"></div>
+                <div class="viewport-info" id="info"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 현재 프레임 번호 (사용 안 함)
+        let currentFrame = 0;
+        const totalFrames = 1; // 단일 모델만 사용
+
+        // 모델 파일 설정 함수
+        function getModelForFrame(frameNum) {
+            return { 
+                name: 'Default Quality', 
+                file: `output/3d_models/body_mesh_fpfh.obj`, 
+                skeletonFile: `output/3d_models/skeleton_data_voted_ensemble.json`
+            };
+        }
+
+        let model = getModelForFrame(currentFrame);
+        let skeletonData = null;
+
+        // 뷰포트 설정
+        let scene, camera, renderer, controls, gridHelper, mesh, skeleton;
+        let wireframeMode = false;
+        let showGrid = true;
+        let autoRotateEnabled = false;
+        let showSkeleton = true;
+
+        // 초기화
+        function init() {
+            console.log('Initializing viewer...');
+            
+            const viewportDiv = document.getElementById('viewport');
+            const width = viewportDiv.clientWidth;
+            const height = viewportDiv.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xffffff);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 10000);
+            camera.position.set(0, 100, 300);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            renderer.shadowMap.enabled = true;
+            renderer.localClippingEnabled = true; // 클리핑 활성화
+            viewportDiv.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight1.position.set(100, 100, 50);
+            scene.add(directionalLight1);
+
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-100, 50, -50);
+            scene.add(directionalLight2);
+
+            // Grid
+            gridHelper = new THREE.GridHelper(500, 50, 0xcccccc, 0xeeeeee);
+            scene.add(gridHelper);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 50;
+            controls.maxDistance = 1000;
+
+            // 스켈레톤 데이터 로드
+            loadSkeletonData(model.skeletonFile);
+            
+            // 모델 로드
+            loadModel(model.file);
+        }
+
+        // 스켈레톤 데이터 로드
+        function loadSkeletonData(skeletonFile) {
+            console.log(`Loading skeleton data from ${skeletonFile}...`);
+            
+            fetch(skeletonFile)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(`Voted ensemble skeleton data loaded successfully`);
+                    skeletonData = data;
+                    
+                    // 품질 정보 표시
+                    updateQualityInfo(data);
+                    
+                    // 메시가 이미 로드된 경우 스켈레톤 추가
+                    if (mesh) {
+                        addSkeletonToScene();
+                    }
+                })
+                .catch(error => {
+                    console.warn(`Skeleton data loading failed:`, error);
+                    console.log(`Viewer will work without skeleton visualization`);
+                    skeletonData = null;
+                });
+        }
+
+        // 스켈레톤 추가
+        function addSkeletonToScene() {
+            if (!skeletonData || !skeletonData.points) {
+                console.log('No skeleton data available');
+                return;
+            }
+            
+            // 기존 스켈레톤 제거
+            if (skeleton) {
+                scene.remove(skeleton);
+                skeleton = null;
+            }
+            
+            // 메시가 없으면 스켈레톤도 추가하지 않음
+            if (!mesh) {
+                return;
+            }
+            
+            // 메시의 바운딩 박스 계산
+            const meshBox = new THREE.Box3().setFromObject(mesh);
+            const meshCenter = meshBox.getCenter(new THREE.Vector3());
+            const meshSize = meshBox.getSize(new THREE.Vector3());
+            
+            // 스켈레톤의 원래 바운딩 박스 계산
+            let skeletonMinX = Infinity, skeletonMinY = Infinity, skeletonMinZ = Infinity;
+            let skeletonMaxX = -Infinity, skeletonMaxY = -Infinity, skeletonMaxZ = -Infinity;
+            let skeletonCenterX = 0, skeletonCenterY = 0, skeletonCenterZ = 0;
+            let pointCount = 0;
+            
+            for (const [name, point] of Object.entries(skeletonData.points)) {
+                skeletonMinX = Math.min(skeletonMinX, point.x);
+                skeletonMinY = Math.min(skeletonMinY, point.y);
+                skeletonMinZ = Math.min(skeletonMinZ, point.z);
+                skeletonMaxX = Math.max(skeletonMaxX, point.x);
+                skeletonMaxY = Math.max(skeletonMaxY, point.y);
+                skeletonMaxZ = Math.max(skeletonMaxZ, point.z);
+                
+                skeletonCenterX += point.x;
+                skeletonCenterY += point.y;
+                skeletonCenterZ += point.z;
+                pointCount++;
+            }
+            
+            if (pointCount > 0) {
+                skeletonCenterX /= pointCount;
+                skeletonCenterY /= pointCount;
+                skeletonCenterZ /= pointCount;
+            }
+            
+            const skeletonSizeY = skeletonMaxY - skeletonMinY;
+            
+            // 스케일 계산
+            let scale;
+            if (skeletonData.mesh_info && skeletonData.mesh_info.height) {
+                const originalMeshHeight = skeletonData.mesh_info.height;
+                const currentMeshHeight = meshSize.y;
+                scale = currentMeshHeight / originalMeshHeight;
+                console.log(`Original mesh height: ${originalMeshHeight}, Current: ${currentMeshHeight}, Scale: ${scale}`);
+            } else {
+                scale = (meshSize.y / skeletonSizeY) * 0.9;
+                console.log(`Using fallback scale calculation: ${scale}`);
+            }
+            
+            // 오프셋 계산
+            const offsetX = -skeletonCenterX;
+            const offsetY = -skeletonCenterY;
+            
+            // Z축 오프셋: 척추를 기준으로 뒤로 이동
+            // 골반과 어깨는 더 뒤로, 척추는 조금 뒤로 이동
+            const baseOffsetZ = -skeletonCenterZ;
+            const pelvisBackOffset = -6; // 골반 추가 후방 이동
+            const shoulderBackOffset = -10;  // 어깨 추가 후방 이동
+            const spineBackOffset = -5;  // 척추 추가 후방 이동
+            const neckBackOffset = -5;  // 목 추가 후방 이동
+            
+            const yAdjustment = meshSize.y * 0.15;
+            
+            console.log(`Mesh size:`, meshSize);
+            console.log(`Scale: ${scale}, Y adjustment: ${yAdjustment}`);
+            console.log(`Base Z offset: ${baseOffsetZ}, Additional offsets - Pelvis: ${pelvisBackOffset}, Shoulder: ${shoulderBackOffset}, Spine: ${spineBackOffset}`);
+            
+            // 스켈레톤 그룹 생성
+            const skeletonGroup = new THREE.Group();
+            
+            // 스켈레톤 포인트 생성
+            const pointsGeometry = new THREE.BufferGeometry();
+            const pointsPositions = [];
+            const pointsColors = [];
+            
+            for (const [name, point] of Object.entries(skeletonData.points)) {
+                // 목 부분(neck, head) 스켈레톤 포인트는 건너뛰기 (cervical은 유지)
+                if (name.includes('neck') || name.includes('head')) {
+                    continue;
+                }
+                
+                // 부위별 Z축 추가 오프셋 계산
+                let additionalZOffset = 0;
+                
+                // 골반 (pelvis_center, sacrum, left_hip, right_hip)
+                if (name.includes('pelvis') || name.includes('hip') || name.includes('sacr') || name.includes('coccyx')) {
+                    additionalZOffset = pelvisBackOffset;
+                } 
+                // 어깨 (shoulder_center, left_shoulder, right_shoulder)
+                else if (name.includes('shoulder')) {
+                    additionalZOffset = shoulderBackOffset;
+                } 
+                // 척추 (thoracic, lumbar)
+                else if (name.includes('thoracic') || name.includes('lumbar')) {
+                    additionalZOffset = spineBackOffset;
+                }
+                // 경추 (cervical)
+                else if (name.includes('cervical')) {
+                    additionalZOffset = neckBackOffset;
+                }
+                
+                pointsPositions.push(
+                    (point.x + offsetX) * scale,
+                    (point.y + offsetY) * scale + yAdjustment,
+                    (point.z + baseOffsetZ + additionalZOffset) * scale
+                );
+                pointsColors.push(1.0, 0.0, 0.0); // 빨간색 (앙상블 투표 결과 강조)
+            }
+            
+            pointsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(pointsPositions, 3));
+            pointsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(pointsColors, 3));
+            
+            const pointsMaterial = new THREE.PointsMaterial({
+                size: 15,  // 더 큰 포인트로 강조
+                vertexColors: true,
+                sizeAttenuation: false,
+                depthTest: false
+            });
+            
+            const points = new THREE.Points(pointsGeometry, pointsMaterial);
+            skeletonGroup.add(points);
+            
+            // 스켈레톤 연결선 생성
+            if (skeletonData.connections) {
+                skeletonData.connections.forEach(connection => {
+                    const [start, end] = connection;
+                    
+                    if (skeletonData.points[start] && skeletonData.points[end]) {
+                        // 목 부분 연결선은 건너뛰기 (neck, head만 제외, cervical은 유지)
+                        if (start.includes('neck') || start.includes('head') ||
+                            end.includes('neck') || end.includes('head')) {
+                            return;
+                        }
+                        
+                        // 척추 메인 라인 연결은 건너뛰기 (나중에 주황색 굵은 원통으로 그림)
+                        const spineNames = [
+                            'cervical_C1', 'cervical_C2', 'cervical_C3', 'cervical_C4', 'cervical_C5', 'cervical_C6', 'cervical_C7',
+                            'thoracic_T1', 'thoracic_T2', 'thoracic_T3', 'thoracic_T4', 'thoracic_T5', 'thoracic_T6',
+                            'thoracic_T7', 'thoracic_T8', 'thoracic_T9', 'thoracic_T10', 'thoracic_T11', 'thoracic_T12',
+                            'lumbar_L1', 'lumbar_L2', 'lumbar_L3', 'lumbar_L4', 'lumbar_L5',
+                            'sacral_S1', 'sacral_S2', 'sacral_S3', 'sacral_S4', 'sacral_S5'
+                        ];
+                        
+                        // 척추 메인 라인의 연속된 연결인지 확인
+                        const startIdx = spineNames.indexOf(start);
+                        const endIdx = spineNames.indexOf(end);
+                        if (startIdx !== -1 && endIdx !== -1 && Math.abs(startIdx - endIdx) === 1) {
+                            return; // 척추 메인 라인 연결은 건너뛰기
+                        }
+                        
+                        const startPoint = skeletonData.points[start];
+                        const endPoint = skeletonData.points[end];
+                        
+                        // 시작점의 추가 Z축 오프셋
+                        let startAdditionalZ = 0;
+                        if (start.includes('pelvis') || start.includes('hip') || start.includes('sacr') || start.includes('coccyx')) {
+                            startAdditionalZ = pelvisBackOffset;
+                        } else if (start.includes('shoulder')) {
+                            startAdditionalZ = shoulderBackOffset;
+                        } else if (start.includes('thoracic') || start.includes('lumbar')) {
+                            startAdditionalZ = spineBackOffset;
+                        } else if (start.includes('cervical')) {
+                            startAdditionalZ = neckBackOffset;
+                        }
+                        
+                        // 끝점의 추가 Z축 오프셋
+                        let endAdditionalZ = 0;
+                        if (end.includes('pelvis') || end.includes('hip') || end.includes('sacr') || end.includes('coccyx')) {
+                            endAdditionalZ = pelvisBackOffset;
+                        } else if (end.includes('shoulder')) {
+                            endAdditionalZ = shoulderBackOffset;
+                        } else if (end.includes('thoracic') || end.includes('lumbar')) {
+                            endAdditionalZ = spineBackOffset;
+                        } else if (end.includes('cervical')) {
+                            endAdditionalZ = neckBackOffset;
+                        }
+                        
+                        const startPos = new THREE.Vector3(
+                            (startPoint.x + offsetX) * scale,
+                            (startPoint.y + offsetY) * scale + yAdjustment,
+                            (startPoint.z + baseOffsetZ + startAdditionalZ) * scale
+                        );
+                        
+                        const endPos = new THREE.Vector3(
+                            (endPoint.x + offsetX) * scale,
+                            (endPoint.y + offsetY) * scale + yAdjustment,
+                            (endPoint.z + baseOffsetZ + endAdditionalZ) * scale
+                        );
+                        
+                        const direction = new THREE.Vector3().subVectors(endPos, startPos);
+                        const length = direction.length();
+                        const cylinderGeometry = new THREE.CylinderGeometry(2.5, 2.5, length, 8);
+                        const cylinderMaterial = new THREE.MeshPhongMaterial({
+                            color: 0xff6600,  // 주황색 (앙상블 강조)
+                            emissive: 0xff3300,
+                            emissiveIntensity: 0.3,
+                            shininess: 100,
+                            depthTest: false
+                        });
+                        
+                        const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+                        cylinder.position.copy(startPos).add(direction.multiplyScalar(0.5));
+                        cylinder.quaternion.setFromUnitVectors(
+                            new THREE.Vector3(0, 1, 0),
+                            direction.normalize()
+                        );
+                        
+                        cylinder.renderOrder = 998;
+                        skeletonGroup.add(cylinder);
+                    }
+                });
+            }
+            
+            // 척추 메인 라인 강조 (주황색 굵은 원통)
+            const spinePoints = [];
+            const spineOrder = [
+                'cervical_C1', 'cervical_C2', 'cervical_C3', 'cervical_C4', 'cervical_C5', 'cervical_C6', 'cervical_C7',
+                'thoracic_T1', 'thoracic_T2', 'thoracic_T3', 'thoracic_T4', 'thoracic_T5', 'thoracic_T6',
+                'thoracic_T7', 'thoracic_T8', 'thoracic_T9', 'thoracic_T10', 'thoracic_T11', 'thoracic_T12',
+                'lumbar_L1', 'lumbar_L2', 'lumbar_L3', 'lumbar_L4', 'lumbar_L5',
+                'sacral_S1', 'sacral_S2', 'sacral_S3', 'sacral_S4', 'sacral_S5'
+            ];
+            
+            console.log('=== 척추 메인 라인 생성 시작 ===');
+            
+            // 척추 포인트 수집
+            for (const name of spineOrder) {
+                if (skeletonData.points[name]) {
+                    const point = skeletonData.points[name];
+                    
+                    // 부위별 Z축 오프셋
+                    let additionalZOffset = 0;
+                    if (name.includes('cervical')) {
+                        additionalZOffset = neckBackOffset;
+                    } else if (name.includes('thoracic')) {
+                        additionalZOffset = spineBackOffset;
+                    } else if (name.includes('lumbar')) {
+                        additionalZOffset = spineBackOffset;
+                    } else if (name.includes('sacr')) {
+                        additionalZOffset = pelvisBackOffset;
+                    }
+                    
+                    const pos = new THREE.Vector3(
+                        (point.x + offsetX) * scale,
+                        (point.y + offsetY) * scale + yAdjustment,
+                        (point.z + baseOffsetZ + additionalZOffset) * scale
+                    );
+                    spinePoints.push(pos);
+                    console.log(`척추 포인트 추가: ${name}`, pos);
+                }
+            }
+            
+            console.log(`총 척추 포인트 수: ${spinePoints.length}`);
+            
+            // 척추 메인 라인 그리기 (굵은 주황색 원통)
+            for (let i = 0; i < spinePoints.length - 1; i++) {
+                const startPos = spinePoints[i];
+                const endPos = spinePoints[i + 1];
+                
+                const direction = new THREE.Vector3().subVectors(endPos, startPos);
+                const length = direction.length();
+                
+                console.log(`척추 원통 ${i}: 길이 ${length.toFixed(2)}`);
+                
+                // 굵은 주황색 원통 (투명하고 적당한 크기)
+                const spineGeometry = new THREE.CylinderGeometry(3, 3, length, 8);
+                const spineMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xff6600,  // 밝은 주황색
+                    emissive: 0xff4400,
+                    emissiveIntensity: 0.6,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.7,
+                    depthTest: false,  // 메시를 관통해서 보임
+                    side: THREE.DoubleSide
+                });
+                
+                const spineCylinder = new THREE.Mesh(spineGeometry, spineMaterial);
+                spineCylinder.position.copy(startPos).add(direction.multiplyScalar(0.5));
+                spineCylinder.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0),
+                    direction.normalize()
+                );
+                
+                spineCylinder.renderOrder = 1000; // 다른 스켈레톤보다 앞에 표시
+                skeletonGroup.add(spineCylinder);
+            }
+            
+            console.log(`척추 원통 ${spinePoints.length - 1}개 생성 완료`);
+            console.log('=== 척추 메인 라인 생성 완료 ===');
+            
+            skeleton = skeletonGroup;
+            skeleton.renderOrder = 999;
+            scene.add(skeleton);
+            
+            console.log('Voted ensemble skeleton added to scene with highlighted spine');
+        }
+
+        // 모델 로드
+        function loadModel(filepath) {
+            console.log(`Loading model: ${filepath}`);
+            const loader = new OBJLoader();
+            
+            loader.load(
+                filepath,
+                (object) => {
+                    console.log(`Successfully loaded model: ${filepath}`);
+                    
+                    // 기존 메시 제거
+                    if (mesh) {
+                        scene.remove(mesh);
+                    }
+
+                    // 중심 정렬
+                    const box = new THREE.Box3().setFromObject(object);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+                    object.position.sub(center);
+                    
+                    // 메쉬를 오른쪽으로 이동 (X축 양의 방향)
+                    object.position.x -= 5;
+
+                    // 클리핑 평면 설정 (토르소만 보이도록)
+                    // 1. 무릎 아래 자르기 (Y축 기준 - 하체 하단부)
+                    const kneeHeight = -size.y * 0.2; // 중심 기준 아래쪽 20% 지점
+                    const clipPlaneKnee = new THREE.Plane(new THREE.Vector3(0, 1, 0), -kneeHeight);
+                    
+                    // 2. 팔 자르기 - 어깨에서 살짝 아래 (X축 양쪽)
+                    const shoulderWidth = size.x * 0.25; // 어깨 너비 (중심에서 25%)
+                    const shoulderHeight = size.y * 0.25; // 어깨 높이 (중심에서 위쪽 25%)
+                    
+                    // 왼쪽 팔 자르기 (X < -shoulderWidth인 부분 중 어깨 아래)
+                    const clipPlaneLeftArm = new THREE.Plane(new THREE.Vector3(1, 0, 0), shoulderWidth);
+                    
+                    // 오른쪽 팔 자르기 (X > shoulderWidth인 부분 중 어깨 아래)
+                    const clipPlaneRightArm = new THREE.Plane(new THREE.Vector3(-1, 0, 0), shoulderWidth);
+                    
+                    const clippingPlanes = [clipPlaneKnee, clipPlaneLeftArm, clipPlaneRightArm];
+
+                    // 재질 설정 (클리핑 적용)
+                    object.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            child.material = new THREE.MeshPhongMaterial({
+                                color: 0xb8d4ff,
+                                specular: 0x111111,
+                                shininess: 30,
+                                flatShading: false,
+                                clippingPlanes: clippingPlanes,
+                                clipShadows: true
+                            });
+                        }
+                    });
+
+                    scene.add(object);
+                    mesh = object;
+
+                    // 정보 표시
+                    updateInfo(object);
+                    
+                    // 스켈레톤 추가 (데이터가 이미 로드된 경우)
+                    if (skeletonData) {
+                        addSkeletonToScene();
+                    }
+
+                    // 로딩 완료
+                    document.getElementById('loading').classList.add('hidden');
+                },
+                (xhr) => {
+                    const percent = xhr.total > 0 ? (xhr.loaded / xhr.total * 100).toFixed(2) : 'N/A';
+                    console.log(`Model: ${percent}% loaded`);
+                },
+                (error) => {
+                    console.error(`Error loading model from ${filepath}:`, error);
+                    document.getElementById('info').innerHTML = `<span style="color: #ff4444;">로드 실패</span>`;
+                    document.getElementById('loading').classList.add('hidden');
+                }
+            );
+        }
+
+        // 정보 업데이트
+        function updateInfo(object) {
+            let vertexCount = 0;
+            let faceCount = 0;
+
+            object.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    if (child.geometry.attributes.position) {
+                        vertexCount += child.geometry.attributes.position.count;
+                    }
+                    if (child.geometry.index) {
+                        faceCount += child.geometry.index.count / 3;
+                    } else if (child.geometry.attributes.position) {
+                        faceCount += child.geometry.attributes.position.count / 3;
+                    }
+                }
+            });
+
+            const infoDiv = document.getElementById('info');
+            infoDiv.innerHTML = `
+                <strong>Default Quality Mesh</strong><br>
+                정점: ${vertexCount.toLocaleString()}<br>
+                면: ${Math.floor(faceCount).toLocaleString()}
+            `;
+        }
+
+        // 품질 정보 업데이트
+        function updateQualityInfo(data) {
+            const qualityDiv = document.getElementById('quality');
+            
+            if (!data || !data.quality_metrics) {
+                qualityDiv.innerHTML = '<div style="color: #666;">품질 데이터 없음</div>';
+                return;
+            }
+            
+            const quality = data.quality_metrics;
+            const angles = quality.angles || {};
+            
+            let html = '<div class="quality-title">🏆 최적 스켈레톤 (앙상블 보팅)</div>';
+            
+            if (angles.cervical_lordosis !== undefined) {
+                html += `<div class="quality-metric">
+                    경추 전만각: <span class="quality-value">${angles.cervical_lordosis.toFixed(1)}°</span>
+                </div>`;
+            }
+            
+            if (angles.thoracic_kyphosis !== undefined) {
+                html += `<div class="quality-metric">
+                    흉추 후만각: <span class="quality-value">${angles.thoracic_kyphosis.toFixed(1)}°</span>
+                </div>`;
+            }
+            
+            if (angles.lumbar_lordosis !== undefined) {
+                html += `<div class="quality-metric">
+                    요추 전만각: <span class="quality-value">${angles.lumbar_lordosis.toFixed(1)}°</span>
+                </div>`;
+            }
+            
+            html += `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.2); color: #aaa; font-size: 10px;">
+                6개 LOD 모델의 예측을 종합하여<br>
+                중앙값 기반 보팅으로 선택된 최적 결과
+            </div>`;
+            
+            qualityDiv.innerHTML = html;
+        }
+
+        // 애니메이션 루프
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (autoRotateEnabled && mesh) {
+                mesh.rotation.y += 0.005;
+                if (skeleton) skeleton.rotation.y += 0.005;
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // 버튼 이벤트 설정
+        function setupControls() {
+            // 카메라 리셋
+            document.getElementById('resetCamera').addEventListener('click', () => {
+                camera.position.set(0, 100, 300);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            });
+
+            // 와이어프레임 토글
+            document.getElementById('toggleWireframe').addEventListener('click', function() {
+                wireframeMode = !wireframeMode;
+                this.classList.toggle('active', wireframeMode);
+                
+                if (mesh) {
+                    mesh.traverse((child) => {
+                        if (child instanceof THREE.Mesh) {
+                            child.material.wireframe = wireframeMode;
+                        }
+                    });
+                }
+            });
+
+            // 그리드 토글
+            document.getElementById('toggleGrid').addEventListener('click', function() {
+                showGrid = !showGrid;
+                this.classList.toggle('active', !showGrid);
+                gridHelper.visible = showGrid;
+            });
+
+            // 자동 회전
+            document.getElementById('autoRotate').addEventListener('click', function() {
+                autoRotateEnabled = !autoRotateEnabled;
+                this.classList.toggle('active', autoRotateEnabled);
+            });
+            
+            // 스켈레톤 토글
+            document.getElementById('toggleSkeleton').addEventListener('click', function() {
+                showSkeleton = !showSkeleton;
+                this.classList.toggle('active', showSkeleton);
+                
+                if (skeleton) {
+                    skeleton.visible = showSkeleton;
+                }
+            });
+        }
+
+        // 윈도우 리사이즈
+        function onWindowResize() {
+            const viewportDiv = document.getElementById('viewport');
+            const width = viewportDiv.clientWidth;
+            const height = viewportDiv.clientHeight;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        // 이벤트 리스너
+        window.addEventListener('resize', onWindowResize, false);
+
+        // 실행
+        init();
+        setupControls();
+        animate();
+    </script>
+</body>
+</html>
