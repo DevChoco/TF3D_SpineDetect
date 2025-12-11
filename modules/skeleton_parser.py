@@ -864,17 +864,17 @@ def print_angles(angles):
     def evaluate_metric(value, normal_range, caution_range, unit="°"):
         """지표를 평가하여 상태와 색상을 반환"""
         if unit == "cm":
-            status = "✅ 정상"
+            status = "정상"
             if value > caution_range[1]:
-                status = "⚠️  주의"
+                status = "주의"
             if value > normal_range[1]:
-                status = "❌ 비정상"
+                status = "비정상!"
         else:
-            status = "✅ 정상"
+            status = "정상"
             if value < caution_range[0] or value > caution_range[1]:
-                status = "⚠️  주의"
+                status = "주의"
             if value < normal_range[0] or value > normal_range[1]:
-                status = "❌ 비정상"
+                status = "비정상!"
         return status
     
     print(f"\nSpine Angle Analysis (Cobb Angle):")
@@ -928,57 +928,57 @@ def print_angles(angles):
     
     if cervical < 10 or cervical > 45:
         if cervical < 10:
-            issues.append(f"❌ Insufficient cervical lordosis ({cervical:.1f}°) - Suspected forward head posture")
+            issues.append(f"Insufficient cervical lordosis ({cervical:.1f}°) - Suspected forward head posture")
         else:
-            issues.append(f"❌ Excessive cervical lordosis ({cervical:.1f}°)")
+            issues.append(f"Excessive cervical lordosis ({cervical:.1f}°)")
     elif cervical < 20 or cervical > 35:
         if cervical < 20:
-            issues.append(f"⚠️  Slightly insufficient cervical lordosis ({cervical:.1f}°)")
+            issues.append(f"Slightly insufficient cervical lordosis ({cervical:.1f}°)")
         else:
-            issues.append(f"⚠️  Slightly excessive cervical lordosis ({cervical:.1f}°)")
+            issues.append(f"Slightly excessive cervical lordosis ({cervical:.1f}°)")
     
     if thoracic < 15 or thoracic > 55:
         if thoracic > 55:
-            issues.append(f"❌ Excessive thoracic kyphosis ({thoracic:.1f}°) - Suspected rounded shoulders")
+            issues.append(f"Excessive thoracic kyphosis ({thoracic:.1f}°) - Suspected rounded shoulders")
         else:
-            issues.append(f"❌ Insufficient thoracic kyphosis ({thoracic:.1f}°)")
+            issues.append(f"Insufficient thoracic kyphosis ({thoracic:.1f}°)")
     elif thoracic < 20 or thoracic > 40:
         if thoracic > 40:
-            issues.append(f"⚠️  Slightly excessive thoracic kyphosis ({thoracic:.1f}°)")
+            issues.append(f"Slightly excessive thoracic kyphosis ({thoracic:.1f}°)")
         else:
-            issues.append(f"⚠️  Slightly insufficient thoracic kyphosis ({thoracic:.1f}°)")
+            issues.append(f"Slightly insufficient thoracic kyphosis ({thoracic:.1f}°)")
     
     if lumbar < 30 or lumbar > 70:
         if lumbar < 30:
-            issues.append(f"❌ Insufficient lumbar lordosis ({lumbar:.1f}°) - Flat back")
+            issues.append(f"Insufficient lumbar lordosis ({lumbar:.1f}°) - Flat back")
         else:
-            issues.append(f"❌ Excessive lumbar lordosis ({lumbar:.1f}°)")
+            issues.append(f"Excessive lumbar lordosis ({lumbar:.1f}°)")
     elif lumbar < 40 or lumbar > 60:
         if lumbar < 40:
-            issues.append(f"⚠️  Slightly insufficient lumbar lordosis ({lumbar:.1f}°)")
+            issues.append(f"Slightly insufficient lumbar lordosis ({lumbar:.1f}°)")
         else:
-            issues.append(f"⚠️  Slightly excessive lumbar lordosis ({lumbar:.1f}°)")
+            issues.append(f"Slightly excessive lumbar lordosis ({lumbar:.1f}°)")
     
     if shoulder > 10:
-        issues.append(f"❌ Severe shoulder imbalance ({shoulder:.1f}°)")
+        issues.append(f"Severe shoulder imbalance ({shoulder:.1f}°)")
     elif shoulder > 2:
-        issues.append(f"⚠️  Slight shoulder imbalance ({shoulder:.1f}°)")
+        issues.append(f"Slight shoulder imbalance ({shoulder:.1f}°)")
     
     if pelvis > 10:
-        issues.append(f"❌ Severe pelvic tilt ({pelvis:.1f}°)")
+        issues.append(f"Severe pelvic tilt ({pelvis:.1f}°)")
     elif pelvis > 3:
-        issues.append(f"⚠️  Slight pelvic tilt ({pelvis:.1f}°)")
+        issues.append(f"Slight pelvic tilt ({pelvis:.1f}°)")
     
     if sva > 6:
-        issues.append(f"❌ Severe spine misalignment ({sva:.1f}cm) - Excessive anterior/posterior shift")
+        issues.append(f"Severe spine misalignment ({sva:.1f}cm) - Excessive anterior/posterior shift")
     elif sva > 4:
-        issues.append(f"⚠️  Slight spine misalignment ({sva:.1f}cm)")
+        issues.append(f"Slight spine misalignment ({sva:.1f}cm)")
     
     if issues:
         print(f"\n   Issues found:")
         for issue in issues:
             print(f"   {issue}")
     else:
-        print(f"   ✅ All metrics within normal range! Excellent posture.")
+        print(f"All metrics within normal range! Excellent posture.")
     
     print("="*60 + "\n")

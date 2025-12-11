@@ -1,6 +1,6 @@
 === Mesh Optimization Info ===
 
-Vertex reduction: 79.1%
+Vertex reduction: 79.0%
 Triangle reduction: 80.0%
 Surface area preservation: 99.9%
 Volume preservation: 100.0%

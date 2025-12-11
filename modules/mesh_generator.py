@@ -336,7 +336,7 @@ def create_and_save_mesh(pcd, output_dir="output/3d_models", base_filename="body
             complexity_analysis = analyze_mesh_complexity(mesh)
             print(f"Mesh complexity score: {complexity_analysis['complexity_score']:.3f}")
         
-        print(f"\n🎯 Applying intelligent vertex reduction... (target reduction: {(1-reduction_ratio)*100:.1f}%)")
+        print(f"\nApplying intelligent vertex reduction... (target reduction: {(1-reduction_ratio)*100:.1f}%)")
         
         if optimization_level == "high_quality":
             optimized_mesh = adaptive_mesh_optimization(mesh, complexity_level="auto")
@@ -378,9 +378,9 @@ def create_and_save_mesh(pcd, output_dir="output/3d_models", base_filename="body
             print(f"\nTotal {len(lod_meshes)} LOD levels created.")
             print(f"Total files saved: {len(saved_files)}")
         
-        print(f"\n=== 🎉 Mesh Generation and Optimization Complete ===")
-        print("✅ Optimized with intelligent vertex reduction")
-        print(f"✅ Total {len(saved_files)} files saved")
+        print(f"\n=== Mesh Generation and Optimization Complete ===")
+        print("Optimized with intelligent vertex reduction")
+        print(f"Total {len(saved_files)} files saved")
         
         return optimized_mesh, saved_files
     else:

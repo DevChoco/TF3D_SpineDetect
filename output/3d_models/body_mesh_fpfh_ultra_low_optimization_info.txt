@@ -1,8 +1,8 @@
 === Mesh Optimization Info ===
 
-Vertex reduction: 94.5%
+Vertex reduction: 94.6%
 Triangle reduction: 95.0%
 Surface area preservation: 99.9%
 Volume preservation: 100.0%
-Overall quality score: 100.0/100
+Overall quality score: 99.9/100
 Compression ratio: 20.01:1
