@@ -8,7 +8,7 @@ The spinal angle is an important indicator of body balance. It is important to r
 
 ## Installation
 ```
-conda create -n capvton python==3.10
+conda create -n tf3D python==3.10
 conda activate tf3d
 cd tf3d
 pip install -r requirements.txt
